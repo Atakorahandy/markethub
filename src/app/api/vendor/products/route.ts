@@ -47,7 +47,9 @@ const schema = z.object({
   lowStockThreshold: z.coerce.number().int().min(0).default(5),
   images: z.array(z.string().url()).max(8).default([]),
   tags: z.array(z.string().trim().max(30)).max(10).default([]),
-  status: z.enum(["draft", "active"]).default("active"),
+  // A vendor can only stage a product as draft or submit it for review —
+  // going live ("active") requires admin approval (Phase 7 moderation gate).
+  status: z.enum(["draft", "pending_review"]).default("pending_review"),
 });
 
 export const POST = handler(async (req: Request) => {

@@ -20,12 +20,12 @@ export type ProductFormValues = {
   lowStockThreshold: string;
   images: string; // newline-separated URLs in the form, converted to array on submit
   tags: string; // comma-separated
-  status: "draft" | "active" | "out_of_stock" | "suspended";
+  status: "draft" | "pending_review" | "active" | "rejected" | "out_of_stock" | "suspended";
 };
 
 const EMPTY: ProductFormValues = {
   name: "", categoryId: "", brandId: "", sku: "", shortDescription: "", description: "",
-  price: "", discountPrice: "", stock: "0", lowStockThreshold: "5", images: "", tags: "", status: "active",
+  price: "", discountPrice: "", stock: "0", lowStockThreshold: "5", images: "", tags: "", status: "pending_review",
 };
 
 export function emptyProductForm(): ProductFormValues {
@@ -152,6 +152,9 @@ export function ProductForm({
         <select className="select" value={value.status} onChange={(e) => set("status", e.target.value as ProductFormValues["status"])}>
           {statusOptions.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
         </select>
+        {statusOptions.includes("pending_review") && (
+          <p className="muted mt-1 text-xs">A product only appears in the marketplace once our team approves it — submit for review when it's ready.</p>
+        )}
       </div>
     </div>
   );

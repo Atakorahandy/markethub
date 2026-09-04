@@ -28,7 +28,7 @@ export default function NewProductPage() {
     <form onSubmit={submit} className="mx-auto max-w-2xl space-y-4">
       <h1 className="section-title">Add product</h1>
       <div className="card p-5">
-        <ProductForm value={value} onChange={setValue} statusOptions={["draft", "active"]} />
+        <ProductForm value={value} onChange={setValue} statusOptions={["draft", "pending_review"]} />
       </div>
       {err && <p className="text-sm text-red-600">{err}</p>}
       <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Create product"}</button>

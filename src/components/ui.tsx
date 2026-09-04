@@ -14,6 +14,7 @@ const STATUS_TONE: Record<string, string> = {
   on_delivery: "bg-sky-100 text-sky-800",
   active: "bg-emerald-100 text-emerald-800",
   draft: "bg-zinc-200 text-zinc-700",
+  pending_review: "bg-amber-100 text-amber-800",
   out_of_stock: "bg-amber-100 text-amber-800",
   pending_payment: "bg-amber-100 text-amber-800",
   cancelled: "bg-red-100 text-red-700",
@@ -27,6 +28,9 @@ const STATUS_TONE: Record<string, string> = {
   out_for_delivery: "bg-violet-100 text-violet-800",
   failed: "bg-red-100 text-red-700",
   pending_assignment: "bg-amber-100 text-amber-800",
+  refunded: "bg-orange-100 text-orange-800",
+  published: "bg-emerald-100 text-emerald-800",
+  unpublished: "bg-zinc-200 text-zinc-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {

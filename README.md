@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 6 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 7 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -50,7 +50,7 @@ no copied branding, UI, or code.
 - Admin can set a per-vendor commission override from `/admin/vendors` (falls back to the platform default when unset).
 - Inventory: every stock-changing event — a sale at checkout, a return on cancellation, a vendor's manual stock edit — writes an `InventoryTransaction`, not just an update to the counter. The vendor products list flags anything at or below its low-stock threshold.
 
-## Phase 6 — Delivery (this release)
+## Phase 6 — Delivery
 
 - Database: `Delivery` (one job per `VendorOrder`, created automatically the moment a vendor marks their order "shipped"), `DeliveryAgentLedgerEntry` (an agent's balance is likewise always the sum of its ledger — same discipline as the vendor wallet).
 - Self-serve assignment: a verified agent goes online (`/delivery`, toggle) and sees unassigned jobs at `/delivery/pool`. Accepting is an atomic claim (`UPDATE ... WHERE status = 'pending_assignment'`) so two agents racing for the same job can't both win it — verified by design, not just by convention.
@@ -59,7 +59,17 @@ no copied branding, UI, or code.
 - Order tracking: the customer's order page now shows a live delivery status line and the agent's name once assigned, alongside the OTP.
 - **Known simplification, called out in the schema:** an agent's delivery earning is a flat amount independent of the vendor's own wallet credit — Phase 5 already gives the vendor the full delivery fee, so this phase does not subtract from it. There's no unified platform ledger yet to net the two against each other; that would be a reasonable Phase 9+ refinement, not a Phase 6 concern.
 
-**Deliberately not built yet:** reviews, coupons, disputes, product-approval moderation, refunds, image upload (image fields take a URL — object storage is a later phase), low-stock notifications (a visual badge exists; push/email/SMS alerts are Phase 8's notification system), a real SMS/email channel for the delivery OTP. These are later phases and would be premature to scaffold now — see the spec's phased plan.
+## Phase 7 — Admin (this release)
+
+- Database: `Product.status` gains `pending_review`/`rejected` and a `moderationNote` field (admin-to-vendor feedback, mirroring `Vendor.rejectionNote`'s existing pattern); `VendorOrder.status` gains `refunded`; `Refund` (one row per issued refund); `CmsPage` (plain-text, published/draft content pages).
+- **Product moderation:** a vendor's new product now lands in `pending_review`, not `active` — it only appears on the storefront once an admin approves it at `/admin/products`. A vendor can still freely move a product between `draft`/`pending_review`/`out_of_stock` themselves; only an admin can move it into `active`/`rejected`/`suspended` (enforced server-side in the vendor's own PATCH route, not just hidden in the UI). Admin can also feature/unfeature a product from the same screen.
+- **Refunds:** `/admin/orders` lists every `VendorOrder` platform-wide with a Refund action on anything paid-or-further; `/admin/refunds` is the resulting audit list. A refund is full-order-amount only (partial refunds and calling a real payment gateway's refund API are later refinements) and, if the vendor had already been paid out for that order, reverses the *exact* sale + commission ledger entries `creditVendorForDelivery` created — verified in testing by checking the vendor's wallet balance lands back at exactly zero net change, not just "some negative number."
+- **Reports:** `/admin/reports` — settled revenue, paid-order count, average order value, a daily revenue chart, top vendors by revenue, payment-method breakdown, and an order-status breakdown, all filterable by a 7/30/90-day range.
+- **CMS:** `/admin/cms` — create/edit/publish simple content pages (About, Terms, FAQ, ...), rendered publicly at `/page/[slug]`. Deliberately plain text (paragraphs split on blank lines), not HTML/markdown — keeps the platform's XSS surface at zero for admin-authored copy rather than needing a sanitizer.
+- **Audit log viewer:** `/admin/audit-log` — every phase since Phase 1 has been writing to `AuditLog`, but there was no screen to read it until now. Searchable by action/actor/entity.
+- **Fuller dashboard:** `/admin` now shows real business metrics (30-day revenue, paid orders) alongside the existing onboarding-moderation counts, and a products-pending-review count. Each metric card fetches from its own permission-gated endpoint independently (`Promise.allSettled`), so a role missing one permission (e.g. support agent can't see products) still sees every card it's allowed to — not a broken page.
+
+**Deliberately not built yet:** reviews, coupons, disputes, partial refunds, a real payment-gateway refund call, image upload (image fields take a URL — object storage is a later phase), low-stock notifications (a visual badge exists; push/email/SMS alerts are Phase 8's notification system), a real SMS/email channel for the delivery OTP. These are later phases and would be premature to scaffold now — see the spec's phased plan.
 
 ## Getting started
 
@@ -144,8 +154,8 @@ provisioned yet.
 3. **Shopping** — done.
 4. **Payments** — done.
 5. **Vendor platform** — done.
-6. **Delivery** — this release.
-7. **Admin** — full dashboard, moderation, refunds, reports, CMS.
+6. **Delivery** — done.
+7. **Admin** — this release.
 8. **Advanced** — recommendations, flash sales, coupons, chat, support, analytics.
 9. **Security** — OWASP audit, permission/payment/API testing.
 10. **Production** — Docker (optional), CI/CD, monitoring, CDN.

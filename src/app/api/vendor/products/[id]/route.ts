@@ -34,14 +34,24 @@ const schema = z.object({
   lowStockThreshold: z.coerce.number().int().min(0).optional(),
   images: z.array(z.string().url()).max(8).optional(),
   tags: z.array(z.string().trim().max(30)).max(10).optional(),
-  status: z.enum(["draft", "active", "out_of_stock", "suspended"]).optional(),
+  status: z.enum(["draft", "pending_review", "active", "rejected", "out_of_stock", "suspended"]).optional(),
   isFeatured: z.boolean().optional(),
 });
+
+// A vendor can freely move between these; going live, getting suspended, or
+// getting rejected are admin-only calls (Phase 7 moderation gate). Setting
+// status back to its own current value is always allowed as a no-op, so the
+// edit form can submit unchanged when it's showing an admin-set status.
+const VENDOR_SETTABLE_STATUS = new Set(["draft", "pending_review", "out_of_stock"]);
 
 export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
   const id = idSchema.parse(params.id);
   const { session, product } = await loadOwnProduct(req, id);
   const body = await parseBody(req, schema);
+
+  if (body.status !== undefined && body.status !== product.status && !VENDOR_SETTABLE_STATUS.has(body.status)) {
+    throw Errors.forbidden(`Only an admin can move a product to "${body.status.replace(/_/g, " ")}".`);
+  }
 
   const price = body.price != null ? Math.round(body.price * 100) : undefined;
   const discountPrice = body.discountPrice !== undefined ? (body.discountPrice != null ? Math.round(body.discountPrice * 100) : null) : undefined;

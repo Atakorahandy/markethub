@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace + Phase 3
-// Shopping + Phase 4 Payments + Phase 5 Vendor Platform + Phase 6 Delivery)
+// Shopping + Phase 4 Payments + Phase 5 Vendor Platform + Phase 6 Delivery +
+// Phase 7 Admin)
 //
 // Original multi-vendor marketplace, inspired by common e-commerce platform
 // functionality — no copied branding, UI, or code from any specific product.
@@ -25,6 +26,16 @@
 // the vendor's own wallet credit — Phase 5 already gives the vendor the full
 // delivery fee, so this does not subtract from it; there is no unified
 // platform ledger yet to net the two against each other correctly.
+//
+// Phase 7 adds: product moderation (a vendor's new product now lands in
+// "pending_review" and only appears publicly once an admin approves it —
+// `Product.moderationNote` mirrors `Vendor.rejectionNote`'s pattern for
+// admin-to-vendor feedback), Refund (admin-issued, full-order-amount only —
+// partial refunds and calling a real payment gateway's refund API are later
+// refinements; when the vendor had already been paid, the exact sale +
+// commission ledger entries are reversed), and CmsPage (simple published/
+// draft content pages — plain text, no HTML/markdown, rendered at
+// /page/[slug]).
 //
 // PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
 //
@@ -263,7 +274,12 @@ model Product {
   images         String  @default("[]") // JSON string[] of image URLs
   tags           String  @default("[]") // JSON string[]
   specifications String  @default("{}") // JSON Record<string,string>
-  status      String   @default("active") // draft | active | out_of_stock | suspended
+  // draft | pending_review | active | rejected | out_of_stock | suspended.
+  // A vendor can only set draft/pending_review/out_of_stock themselves — a
+  // new product starts at pending_review and only an admin can move it to
+  // active/rejected/suspended (Phase 7 moderation gate).
+  status      String   @default("pending_review")
+  moderationNote String @default("") // admin's note on rejection/suspension, shown to the vendor
   isFeatured  Boolean  @default(false)
   ratingAvg   Float    @default(0)
   ratingCount Int      @default(0)
@@ -406,7 +422,8 @@ model VendorOrder {
   subtotal    Int // pesewas
   deliveryFee Int // pesewas
   total       Int // pesewas
-  // pending_payment | paid | processing | shipped | delivered | cancelled
+  // pending_payment | paid | processing | shipped | delivered | cancelled |
+  // refunded (admin-issued, Phase 7 — see Refund)
   status      String   @default("pending_payment")
   walletCreditedAt DateTime? // set once, when this vendor's earnings hit their wallet
   createdAt   DateTime @default(now())
@@ -417,6 +434,7 @@ model VendorOrder {
   items    OrderItem[]
   history  VendorOrderStatusHistory[]
   delivery Delivery?
+  refunds  Refund[]
 
   @@index([orderId])
   @@index([vendorId])
@@ -655,4 +673,44 @@ model AuditLog {
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+// ── Refunds (Phase 7) ────────────────────────────────────────────────────────
+
+// Admin-issued, full-order-amount only (spec's later phases can add partial
+// refunds and a real gateway refund call). Reverses the vendor's wallet
+// credit if one was already made, via the same paired sale/commission
+// ledger discipline `creditVendorForDelivery` uses — never a silent balance
+// edit.
+model Refund {
+  id              String   @id @default(cuid())
+  vendorOrderId   String
+  amount          Int // pesewas — always equals the VendorOrder's total for now
+  reason          String
+  walletReversed  Boolean  @default(false) // true if the vendor had already been paid and was clawed back
+  processedById   String?
+  processedByName String   @default("")
+  createdAt       DateTime @default(now())
+
+  vendorOrder VendorOrder @relation(fields: [vendorOrderId], references: [id], onDelete: Cascade)
+
+  @@index([vendorOrderId])
+}
+
+// ── CMS (Phase 7) ────────────────────────────────────────────────────────────
+
+// Plain-text content pages (About, Terms, FAQ, ...) an admin can publish
+// without a deploy. Deliberately no HTML/markdown rendering yet — content is
+// rendered as paragraphs to keep the platform's XSS surface at zero for
+// admin-authored copy.
+model CmsPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  content   String   @default("")
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published])
 }
