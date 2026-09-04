@@ -1,10 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SessionProvider, useSession } from "./session";
 
 function Header() {
   const { me, loading, logout } = useSession();
+  const router = useRouter();
+  const [q, setQ] = useState("");
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    router.push(q.trim() ? `/products?q=${encodeURIComponent(q.trim())}` : "/products");
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--card)]/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
@@ -12,10 +22,12 @@ function Header() {
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white">M</span>
           MarketHub
         </Link>
-        <div className="hidden flex-1 sm:block">
-          <input className="input" placeholder="Search products, brands, stores… (coming soon)" disabled />
-        </div>
+        <Link href="/categories" className="hidden text-sm font-medium sm:block">Categories</Link>
+        <form onSubmit={submitSearch} className="hidden flex-1 sm:block">
+          <input className="input" placeholder="Search products…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </form>
         <nav className="ml-auto flex items-center gap-3 text-sm">
+          <Link href="/products" className="link">Shop</Link>
           {!loading && me?.user ? (
             <>
               <Link href="/account" className="link">{me.user.name.split(" ")[0]}</Link>

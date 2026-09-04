@@ -1,19 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MARKETHUB — data model (Phase 1: Foundation)
+// MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace)
 //
 // Original multi-vendor marketplace, inspired by common e-commerce platform
 // functionality — no copied branding, UI, or code from any specific product.
 //
-// Phase 1 scope only: identity, RBAC, vendor & delivery-agent onboarding
-// records, and audit logging. Catalog (categories/products), cart, checkout,
-// orders, payments, delivery jobs, reviews, coupons and disputes are later
-// phases and are deliberately NOT modelled yet — see README.md.
+// Phase 2 adds: categories, brands, products (with simple variants), and
+// public browse/search. Cart, checkout, orders, payments, delivery jobs,
+// reviews, coupons and disputes are later phases and are deliberately NOT
+// modelled yet — see README.md.
 //
 // PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
 //
-// MULTI-TENANCY: every vendor-owned row will carry `vendorId` (from Phase 2
-// onward). No query may cross vendors. Platform staff are scoped by role, not
-// by vendor.
+// MULTI-TENANCY: every vendor-owned row carries `vendorId`. No query may
+// cross vendors. Platform staff are scoped by role, not by vendor.
+//
+// MONEY: every price is an INTEGER minor unit — pesewas (1 GHS = 100 pesewas)
+// — so financial math is always exact. See src/lib/money.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 generator client {
@@ -161,6 +163,7 @@ model Vendor {
   owner     User              @relation("VendorOwner", fields: [ownerId], references: [id])
   staff     VendorStaff[]
   userRoles UserRole[]
+  products  Product[]
 
   @@index([status])
   @@index([city, region])
@@ -180,6 +183,94 @@ model VendorStaff {
 
   @@unique([vendorId, userId])
   @@index([userId])
+}
+
+// ── Catalog ──────────────────────────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  imageUrl  String?
+  parentId  String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId])
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  logoUrl   String?
+  createdAt DateTime @default(now())
+
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  vendorId    String
+  categoryId  String
+  brandId     String?
+  name        String
+  sku         String   @default("")
+  description String   @default("")
+  shortDescription String @default("")
+  // Money — integer pesewas, never float.
+  price         Int
+  discountPrice Int?
+  stock         Int      @default(0)
+  lowStockThreshold Int  @default(5)
+  weight        Float?   // kg
+  // JSON string arrays/objects — keeps the schema provider-portable (no
+  // native arrays/enums), matching the rest of the portfolio.
+  images         String  @default("[]") // JSON string[] of image URLs
+  tags           String  @default("[]") // JSON string[]
+  specifications String  @default("{}") // JSON Record<string,string>
+  status      String   @default("active") // draft | active | out_of_stock | suspended
+  isFeatured  Boolean  @default(false)
+  ratingAvg   Float    @default(0)
+  ratingCount Int      @default(0)
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendor   Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  category Category        @relation(fields: [categoryId], references: [id])
+  brand    Brand?          @relation(fields: [brandId], references: [id])
+  variants ProductVariant[]
+
+  @@index([vendorId])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([status])
+  @@index([price])
+}
+
+// Simple key-value variant (e.g. "Red / M") rather than a full attribute
+// matrix — keeps Phase 2 lean; a dedicated attribute system can replace this
+// later without touching Order/Cart code, since both reference variant ids.
+model ProductVariant {
+  id            String  @id @default(cuid())
+  productId     String
+  label         String  // e.g. "Red / Medium", "128GB"
+  sku           String  @default("")
+  priceOverride Int?    // pesewas; null = use Product.price
+  stock         Int     @default(0)
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
 }
 
 // ── Delivery agents ──────────────────────────────────────────────────────────

@@ -4,9 +4,9 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 1 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 2 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
-## Phase 1 — Foundation (this release)
+## Phase 1 — Foundation
 
 - Project setup: Next.js 14 (App Router) + TypeScript + Tailwind, Prisma + PostgreSQL (Neon).
 - Database: identity, RBAC (permissions/roles), vendor & delivery-agent onboarding records, audit log.
@@ -15,7 +15,15 @@ no copied branding, UI, or code.
 - User management: admin console can search/suspend/activate users, and approve/reject/suspend vendor & delivery-agent applications.
 - Basic UI system: design tokens, shared components, a storefront shell (header/footer) and a console shell reused by the admin, vendor and delivery-agent dashboards.
 
-**Deliberately not built yet:** product catalog, cart, checkout, orders, payments, delivery jobs, reviews, coupons, disputes, wallets. These are later phases and would be premature to scaffold now — see the spec's phased plan.
+## Phase 2 — Marketplace (this release)
+
+- Database: `Category` (self-referencing, two levels), `Brand`, `Product` (integer-pesewas pricing, JSON-string images/tags/specs), simple `ProductVariant`.
+- Public storefront: `/products` (search + category/brand/price filters + sort + pagination), `/product/[slug]` (gallery, variants, specs, vendor card), `/store/[slug]` (vendor storefront), `/categories`, home page now shows real categories and new arrivals.
+- Vendor console: `/vendor/products` (list/add/edit/delete own products — gated on an **approved** store), `/vendor/store` (edit description/logo/banner, which the public store page renders).
+- Admin console: `/admin/categories`, `/admin/brands` (create/delete taxonomy).
+- All catalog reads exclude non-approved vendors and non-active products server-side — a suspended vendor's listings disappear from the storefront even if a product row still exists.
+
+**Deliberately not built yet:** cart, checkout, orders, payments, delivery jobs, reviews, coupons, disputes, wallets, product-approval moderation, image upload (image fields take a URL — object storage is a later phase). These are later phases and would be premature to scaffold now — see the spec's phased plan.
 
 ## Getting started
 
@@ -64,7 +72,8 @@ projects (foodhub, laundrypro, traffic-command) is a straightforward addition.
 | Support agent | support@markethub.test | Support!2026 |
 | Finance officer | finance@markethub.test | Finance!2026 |
 | Vendor owner (pending review) | owner@accraelectronics.test | Owner!2026 |
-| Vendor owner (approved) | owner@kumasifashion.test | Owner!2026 |
+| Vendor owner (approved, has products) | owner@kumasifashion.test | Owner!2026 |
+| Vendor owner (approved, has products) | owner@techzone.test | Owner!2026 |
 | Delivery agent (pending verification) | kwame.rider@markethub.test | Rider!2026 |
 | Customer | ama@markethub.test | Customer!2026 |
 
