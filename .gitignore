@@ -1,0 +1,26 @@
+/node_modules
+/.next
+/out
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env*.local
+
+# prisma local db / migration history is generated locally by `npm run setup`
+prisma/dev.db
+prisma/dev.db-journal
+*.sqlite
+
+# local dev Postgres cluster (native, not Docker) — see README "Local database"
+.pgdata/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
+coverage

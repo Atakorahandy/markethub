@@ -1,0 +1,12 @@
+import { ConsoleShell } from "@/components/console-shell";
+
+const NAV = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/vendors", label: "Vendors" },
+  { href: "/admin/delivery-agents", label: "Delivery agents" },
+];
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return <ConsoleShell title="MarketHub" badge="Admin" nav={NAV}>{children}</ConsoleShell>;
+}

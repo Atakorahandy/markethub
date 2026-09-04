@@ -1,0 +1,224 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKETHUB — data model (Phase 1: Foundation)
+//
+// Original multi-vendor marketplace, inspired by common e-commerce platform
+// functionality — no copied branding, UI, or code from any specific product.
+//
+// Phase 1 scope only: identity, RBAC, vendor & delivery-agent onboarding
+// records, and audit logging. Catalog (categories/products), cart, checkout,
+// orders, payments, delivery jobs, reviews, coupons and disputes are later
+// phases and are deliberately NOT modelled yet — see README.md.
+//
+// PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
+//
+// MULTI-TENANCY: every vendor-owned row will carry `vendorId` (from Phase 2
+// onward). No query may cross vendors. Platform staff are scoped by role, not
+// by vendor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Identity, roles & sessions ──────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  phone           String?   @unique
+  passwordHash    String
+  avatarUrl       String?
+  // Coarse account kind for routing the UI. Fine-grained access = roles + perms.
+  kind            String    @default("customer") // customer | vendor | delivery_agent | staff
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  isActive        Boolean   @default(true)
+  failedLogins    Int       @default(0)
+  lockedUntil     DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  roles          UserRole[]
+  refreshTokens  RefreshToken[]
+  passwordResets PasswordReset[]
+  auditLogs      AuditLog[]
+  vendorStaff    VendorStaff[]
+  ownedVendors   Vendor[]        @relation("VendorOwner")
+  deliveryAgent  DeliveryAgent?
+}
+
+// Global permission catalogue rows (seeded from src/lib/rbac.ts PERMISSIONS).
+model Permission {
+  key         String           @id // e.g. "vendors.manage"
+  description String
+  roles       RolePermission[]
+}
+
+// A named role. `scope` = "platform" or "vendor". System roles are seeded and
+// cannot be deleted.
+model Role {
+  id        String   @id @default(cuid())
+  key       String // super_admin | platform_admin | support_agent | finance_officer | vendor_owner | vendor_staff | delivery_agent | customer
+  name      String
+  scope     String   @default("platform") // platform | vendor
+  isSystem  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@unique([key])
+}
+
+model RolePermission {
+  roleId        String
+  permissionKey String
+  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([roleId, permissionKey])
+}
+
+// Grant of a role to a user. `vendorId` is set for vendor-scoped roles.
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  vendorId  String?
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  vendor Vendor? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, vendorId])
+  @@index([vendorId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  jti       String    @unique
+  userAgent String    @default("")
+  ip        String    @default("")
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Vendors (stores) ─────────────────────────────────────────────────────────
+
+model Vendor {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  businessName  String
+  ownerId       String
+  description   String   @default("")
+  category      String   @default("") // free-text business category until Phase 2 Category model exists
+  logoUrl       String?
+  bannerUrl     String?
+  phone         String   @default("")
+  email         String   @default("")
+  // Location
+  addressLine   String   @default("")
+  area          String   @default("")
+  city          String   @default("")
+  region        String   @default("")
+  // Onboarding / moderation
+  status        String   @default("pending") // pending | under_review | approved | rejected | suspended
+  rejectionNote String   @default("")
+  // Settlement (used from Phase 5 onward; collected at onboarding per spec §23)
+  payoutBank    String   @default("")
+  payoutAccount String   @default("")
+  commissionBps Int? // null = platform default
+  // Ratings cache (populated from Phase 8 reviews)
+  ratingAvg     Float    @default(0)
+  ratingCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  owner     User              @relation("VendorOwner", fields: [ownerId], references: [id])
+  staff     VendorStaff[]
+  userRoles UserRole[]
+
+  @@index([status])
+  @@index([city, region])
+}
+
+model VendorStaff {
+  id        String   @id @default(cuid())
+  vendorId  String
+  userId    String
+  roleKey   String   @default("vendor_staff") // vendor_owner | vendor_staff
+  jobTitle  String   @default("")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, userId])
+  @@index([userId])
+}
+
+// ── Delivery agents ──────────────────────────────────────────────────────────
+
+model DeliveryAgent {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  status        String   @default("offline") // offline | online | on_delivery
+  verification  String   @default("pending") // pending | verified | rejected
+  vehicleType   String   @default("motorbike") // bike | motorbike | car | van | on_foot
+  licenseNumber String   @default("")
+  city          String   @default("")
+  region        String   @default("")
+  ratingAvg     Float    @default(0)
+  ratingCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, verification])
+}
+
+// ── Audit log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorName  String   @default("")
+  action     String
+  entityType String   @default("")
+  entityId   String   @default("")
+  meta       String   @default("{}") // JSON string
+  ip         String   @default("")
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
