@@ -59,6 +59,7 @@ function Footer() {
       <div className="mt-2 flex justify-center gap-4">
         <Link href="/register?role=vendor" className="link">Sell on MarketHub</Link>
         <Link href="/register?role=delivery_agent" className="link">Become a delivery agent</Link>
+        <Link href="/support" className="link">Help &amp; support</Link>
       </div>
     </footer>
   );

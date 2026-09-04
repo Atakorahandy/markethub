@@ -12,7 +12,7 @@ export const GET = handler(async (req: Request, { params }: { params: { orderNum
     include: {
       vendorOrders: {
         include: {
-          items: true,
+          items: { include: { review: { select: { id: true } } } },
           vendor: { select: { businessName: true, slug: true, phone: true } },
           delivery: {
             select: {

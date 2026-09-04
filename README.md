@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 7 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 8 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -59,7 +59,7 @@ no copied branding, UI, or code.
 - Order tracking: the customer's order page now shows a live delivery status line and the agent's name once assigned, alongside the OTP.
 - **Known simplification, called out in the schema:** an agent's delivery earning is a flat amount independent of the vendor's own wallet credit — Phase 5 already gives the vendor the full delivery fee, so this phase does not subtract from it. There's no unified platform ledger yet to net the two against each other; that would be a reasonable Phase 9+ refinement, not a Phase 6 concern.
 
-## Phase 7 — Admin (this release)
+## Phase 7 — Admin
 
 - Database: `Product.status` gains `pending_review`/`rejected` and a `moderationNote` field (admin-to-vendor feedback, mirroring `Vendor.rejectionNote`'s existing pattern); `VendorOrder.status` gains `refunded`; `Refund` (one row per issued refund); `CmsPage` (plain-text, published/draft content pages).
 - **Product moderation:** a vendor's new product now lands in `pending_review`, not `active` — it only appears on the storefront once an admin approves it at `/admin/products`. A vendor can still freely move a product between `draft`/`pending_review`/`out_of_stock` themselves; only an admin can move it into `active`/`rejected`/`suspended` (enforced server-side in the vendor's own PATCH route, not just hidden in the UI). Admin can also feature/unfeature a product from the same screen.
@@ -69,7 +69,19 @@ no copied branding, UI, or code.
 - **Audit log viewer:** `/admin/audit-log` — every phase since Phase 1 has been writing to `AuditLog`, but there was no screen to read it until now. Searchable by action/actor/entity.
 - **Fuller dashboard:** `/admin` now shows real business metrics (30-day revenue, paid orders) alongside the existing onboarding-moderation counts, and a products-pending-review count. Each metric card fetches from its own permission-gated endpoint independently (`Promise.allSettled`), so a role missing one permission (e.g. support agent can't see products) still sees every card it's allowed to — not a broken page.
 
-**Deliberately not built yet:** reviews, coupons, disputes, partial refunds, a real payment-gateway refund call, image upload (image fields take a URL — object storage is a later phase), low-stock notifications (a visual badge exists; push/email/SMS alerts are Phase 8's notification system), a real SMS/email channel for the delivery OTP. These are later phases and would be premature to scaffold now — see the spec's phased plan.
+**Deliberately not built yet at this point:** reviews, coupons, disputes, partial refunds, a real payment-gateway refund call, image upload (image fields take a URL — object storage is a later phase), a real SMS/email channel for the delivery OTP.
+
+## Phase 8 — Advanced (this release)
+
+- Database: `Review` (one per purchased `OrderItem`, gated on the owning `VendorOrder` being `delivered`; recomputes `Product.ratingAvg/ratingCount` and `Vendor.ratingAvg/ratingCount` — fields that have existed since Phase 1/2 as an already-anticipated cache), `Coupon` (vendor-scoped only), `FlashSale` (a time-boxed override price on one product), `SupportTicket`/`SupportMessage`. `Order`/`VendorOrder` gain `discountAmount` and `VendorOrder` gains `couponId`.
+- **Reviews:** a customer can rate and review a delivered item from `/orders/[orderNumber]` — one review per purchased line, never per product, so buying the same item twice allows two honest reviews. The product page shows the review list, average, and any seller reply; a vendor replies once from `/vendor/reviews`; admin moderates (publish/hide) from `/admin/reviews`, which recomputes the rating cache exactly like a new review does — hiding one is never a silent number edit.
+- **Recommendations:** "You might also like" on the product page (same category, ranked by rating then views) and a homepage "Trending now" section (`Product.viewCount`, tracked since Phase 2) — no new schema, no ML, both are plain queries.
+- **Flash sales:** a vendor schedules a time-boxed price override on one product at `/vendor/flash-sales`. Every price a customer actually sees or pays — cart, checkout, the product page — is computed through the single `effectiveUnitPrice()` helper in `src/lib/pricing.ts`, never by reading `Product.price`/`discountPrice` directly, so "is this product on flash sale right now" can never disagree between what's displayed and what's charged.
+- **Coupons:** a vendor creates a percent- or fixed-amount code at `/vendor/coupons` (min spend, max discount cap, total/per-customer usage limits — enforced by counting existing non-cancelled `VendorOrder` rows referencing the coupon, never a mutable counter). A customer applies one code at checkout, discounting only the one vendor's slice of a multi-vendor cart; server-side validation is the only source of truth — the cart-page preview call can never be trusted as what actually lands on the order. **Known simplification:** vendor-scoped only, no platform-wide coupon spanning multiple vendors' baskets (would need cross-vendor discount proration).
+- **Support ("chat"):** `/support` — a customer opens a threaded ticket and gets replies from staff working the queue at `/admin/support` (gated on the existing `disputes.manage` permission — support_agent, platform_admin, finance_officer). This is deliberately async threaded messaging, not a real-time socket connection, which would be disproportionate new infrastructure for what the spec item needs; a staff reply auto-assigns an unclaimed ticket and moves it to "pending," a customer reply on a "resolved" ticket reopens it.
+- **Vendor analytics:** `/vendor/analytics` mirrors the admin Reports page's shape (revenue, orders, AOV, daily chart, order-status breakdown) but scoped to the vendor's own store, with a "top products" table instead of "top vendors."
+
+**Deliberately not built yet:** disputes (separate from support tickets), partial refunds, a real payment-gateway refund call, image upload, a real SMS/email channel for the delivery OTP, a platform-wide coupon, real-time chat.
 
 ## Getting started
 
@@ -155,7 +167,7 @@ provisioned yet.
 4. **Payments** — done.
 5. **Vendor platform** — done.
 6. **Delivery** — done.
-7. **Admin** — this release.
-8. **Advanced** — recommendations, flash sales, coupons, chat, support, analytics.
+7. **Admin** — done.
+8. **Advanced** — this release.
 9. **Security** — OWASP audit, permission/payment/API testing.
 10. **Production** — Docker (optional), CI/CD, monitoring, CDN.

@@ -8,7 +8,7 @@ import { formatMoney } from "@/lib/money";
 import { VENDOR_ORDER_STATUS_FLOW } from "@/lib/constants";
 
 type VendorOrderDetail = {
-  id: string; status: string; subtotal: number; deliveryFee: number; total: number; walletCreditedAt: string | null;
+  id: string; status: string; subtotal: number; deliveryFee: number; discountAmount: number; total: number; walletCreditedAt: string | null;
   items: { id: string; nameSnapshot: string; imageSnapshot: string; priceSnapshot: number; quantity: number }[];
   history: { id: string; status: string; note: string; actorName: string; createdAt: string }[];
   order: {
@@ -96,6 +96,9 @@ export default function VendorOrderDetailPage() {
         <div className="muted mt-2 flex justify-between border-t border-[var(--border)] pt-2 text-xs">
           <span>Delivery</span><span>{formatMoney(vo.deliveryFee)}</span>
         </div>
+        {vo.discountAmount > 0 && (
+          <div className="flex justify-between text-xs text-emerald-700"><span>Coupon discount</span><span>-{formatMoney(vo.discountAmount)}</span></div>
+        )}
         <div className="mt-1 flex justify-between border-t border-[var(--border)] pt-2 text-sm font-bold">
           <span>Total</span><span>{formatMoney(vo.total)}</span>
         </div>

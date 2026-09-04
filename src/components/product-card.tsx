@@ -10,12 +10,17 @@ export type ProductCardData = {
   images: string;
   stock: number;
   isFeatured?: boolean;
+  flashSalePrice?: number | null;
   vendor: { businessName: string; slug: string };
 };
 
 export function ProductCard({ product }: { product: ProductCardData }) {
   const image = parseStringArray(product.images)[0];
   const outOfStock = product.stock <= 0;
+  const normalPrice = product.discountPrice ?? product.price;
+  const onFlashSale = product.flashSalePrice != null && product.flashSalePrice < normalPrice;
+  const displayPrice = onFlashSale ? product.flashSalePrice! : normalPrice;
+  const wasPrice = onFlashSale ? normalPrice : product.discountPrice != null ? product.price : null;
 
   return (
     <Link href={`/product/${product.slug}`} className="card group flex flex-col overflow-hidden">
@@ -26,15 +31,16 @@ export function ProductCard({ product }: { product: ProductCardData }) {
         ) : (
           <div className="flex h-full items-center justify-center text-3xl">🛍️</div>
         )}
-        {product.isFeatured && <span className="badge absolute left-2 top-2 bg-accent-500 text-white">Featured</span>}
+        {onFlashSale && <span className="badge absolute left-2 top-2 bg-red-600 text-white">⚡ Flash sale</span>}
+        {!onFlashSale && product.isFeatured && <span className="badge absolute left-2 top-2 bg-accent-500 text-white">Featured</span>}
         {outOfStock && <span className="badge absolute right-2 top-2 bg-zinc-800 text-white">Out of stock</span>}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
         <p className="muted text-xs">{product.vendor.businessName}</p>
         <p className="line-clamp-2 text-sm font-semibold">{product.name}</p>
         <div className="mt-auto flex items-baseline gap-2 pt-1">
-          <span className="font-bold text-brand-700">{formatMoney(product.discountPrice ?? product.price)}</span>
-          {product.discountPrice != null && <span className="muted text-xs line-through">{formatMoney(product.price)}</span>}
+          <span className={`font-bold ${onFlashSale ? "text-red-600" : "text-brand-700"}`}>{formatMoney(displayPrice)}</span>
+          {wasPrice != null && <span className="muted text-xs line-through">{formatMoney(wasPrice)}</span>}
         </div>
       </div>
     </Link>

@@ -8,12 +8,15 @@ import { orderNumber } from "@/lib/ids";
 import { audit } from "@/lib/audit";
 import { initiatePaymentForOrder } from "@/lib/payments/process";
 import { PAYMENT_METHODS } from "@/lib/constants";
+import { activeFlashSalesByProduct, effectiveUnitPrice } from "@/lib/pricing";
+import { findCartCoupon, checkCouponUsage, computeDiscount } from "@/lib/coupons";
 
 const schema = z.object({
   addressId: z.string().cuid(),
   clientRequestId: z.string().uuid(),
   paymentMethod: z.enum(PAYMENT_METHODS.map((m) => m.key) as [string, ...string[]]),
   momoNetwork: z.enum(["mtn", "telecel", "airteltigo"]).optional(),
+  couponCode: z.string().trim().max(30).optional(),
 });
 
 export const POST = handler(async (req: Request) => {
@@ -38,6 +41,7 @@ export const POST = handler(async (req: Request) => {
   const order = await prisma.$transaction(async (tx) => {
     type Line = { vendorId: string; vendorName: string; deliveryFee: number; productId: string; variantId: string | null; name: string; image: string; unitPrice: number; quantity: number };
     const lines: Line[] = [];
+    const flashSaleByProduct = await activeFlashSalesByProduct(tx, cartItems.map((i) => i.productId));
 
     for (const item of cartItems) {
       const product = await tx.product.findUnique({
@@ -47,6 +51,7 @@ export const POST = handler(async (req: Request) => {
       if (!product || product.status !== "active" || product.vendor.status !== "approved") {
         throw Errors.conflict(`An item in your cart is no longer available. Please review your cart.`);
       }
+      const flashSalePrice = flashSaleByProduct.get(product.id) ?? null;
 
       if (item.variantId) {
         const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } });
@@ -56,10 +61,11 @@ export const POST = handler(async (req: Request) => {
           data: { stock: { decrement: item.quantity } },
         });
         if (updated.count !== 1) throw Errors.conflict(`Not enough stock for "${product.name}" (${variant.label}).`);
+        const basePrice = variant.priceOverride ?? product.discountPrice ?? product.price;
         lines.push({
           vendorId: product.vendor.id, vendorName: product.vendor.businessName, deliveryFee: product.vendor.baseDeliveryFee,
           productId: product.id, variantId: variant.id, name: `${product.name} (${variant.label})`,
-          image: JSON.parse(product.images || "[]")[0] ?? "", unitPrice: variant.priceOverride ?? product.discountPrice ?? product.price,
+          image: JSON.parse(product.images || "[]")[0] ?? "", unitPrice: effectiveUnitPrice(basePrice, flashSalePrice),
           quantity: item.quantity,
         });
       } else {
@@ -68,10 +74,11 @@ export const POST = handler(async (req: Request) => {
           data: { stock: { decrement: item.quantity } },
         });
         if (updated.count !== 1) throw Errors.conflict(`Not enough stock for "${product.name}".`);
+        const basePrice = product.discountPrice ?? product.price;
         lines.push({
           vendorId: product.vendor.id, vendorName: product.vendor.businessName, deliveryFee: product.vendor.baseDeliveryFee,
           productId: product.id, variantId: null, name: product.name,
-          image: JSON.parse(product.images || "[]")[0] ?? "", unitPrice: product.discountPrice ?? product.price,
+          image: JSON.parse(product.images || "[]")[0] ?? "", unitPrice: effectiveUnitPrice(basePrice, flashSalePrice),
           quantity: item.quantity,
         });
       }
@@ -80,6 +87,20 @@ export const POST = handler(async (req: Request) => {
     const vendorIds = [...new Set(lines.map((l) => l.vendorId))];
     const vendorSubtotal = (vendorId: string) => lines.filter((l) => l.vendorId === vendorId).reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
     const vendorFee = (vendorId: string) => lines.find((l) => l.vendorId === vendorId)!.deliveryFee;
+
+    // A coupon discounts only the one vendor it belongs to — never the
+    // delivery fee, never another vendor's slice of a multi-vendor cart.
+    let couponId: string | null = null;
+    let discountVendorId: string | null = null;
+    let discountAmount = 0;
+    if (body.couponCode) {
+      const coupon = await findCartCoupon(tx, body.couponCode, vendorIds);
+      const subtotalForVendor = vendorSubtotal(coupon.vendorId);
+      await checkCouponUsage(tx, coupon, { vendorSubtotal: subtotalForVendor, customerId: s.userId });
+      couponId = coupon.id;
+      discountVendorId = coupon.vendorId;
+      discountAmount = computeDiscount(coupon, subtotalForVendor);
+    }
 
     const subtotal = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
     const deliveryFee = vendorIds.reduce((sum, id) => sum + vendorFee(id), 0);
@@ -93,20 +114,25 @@ export const POST = handler(async (req: Request) => {
         recipientName: address.recipientName, phone: address.phone, region: address.region,
         city: address.city, area: address.area, streetLine: address.streetLine,
         deliveryInstructions: address.deliveryInstructions,
-        subtotal, deliveryFee, total: subtotal + deliveryFee,
+        subtotal, deliveryFee, discountAmount, total: subtotal + deliveryFee - discountAmount,
         vendorOrders: {
-          create: vendorIds.map((vendorId) => ({
-            vendorId,
-            subtotal: vendorSubtotal(vendorId),
-            deliveryFee: vendorFee(vendorId),
-            total: vendorSubtotal(vendorId) + vendorFee(vendorId),
-            items: {
-              create: lines.filter((l) => l.vendorId === vendorId).map((l) => ({
-                productId: l.productId, variantId: l.variantId, nameSnapshot: l.name,
-                imageSnapshot: l.image, priceSnapshot: l.unitPrice, quantity: l.quantity,
-              })),
-            },
-          })),
+          create: vendorIds.map((vendorId) => {
+            const vendorDiscount = vendorId === discountVendorId ? discountAmount : 0;
+            return {
+              vendorId,
+              subtotal: vendorSubtotal(vendorId),
+              deliveryFee: vendorFee(vendorId),
+              discountAmount: vendorDiscount,
+              couponId: vendorId === discountVendorId ? couponId : null,
+              total: vendorSubtotal(vendorId) + vendorFee(vendorId) - vendorDiscount,
+              items: {
+                create: lines.filter((l) => l.vendorId === vendorId).map((l) => ({
+                  productId: l.productId, variantId: l.variantId, nameSnapshot: l.name,
+                  imageSnapshot: l.image, priceSnapshot: l.unitPrice, quantity: l.quantity,
+                })),
+              },
+            };
+          }),
         },
       },
     });

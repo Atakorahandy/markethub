@@ -11,10 +11,14 @@ type Category = { id: string; slug: string; name: string; imageUrl: string | nul
 export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [featured, setFeatured] = useState<ProductCardData[]>([]);
+  const [flashSales, setFlashSales] = useState<ProductCardData[]>([]);
+  const [trending, setTrending] = useState<ProductCardData[]>([]);
 
   useEffect(() => {
     api<{ items: Category[] }>("/categories").then((r) => setCategories(r.items.filter((c) => !c.parentId).slice(0, 8)));
     api<{ items: ProductCardData[] }>("/products?sort=newest&pageSize=8").then((r) => setFeatured(r.items));
+    api<{ items: ProductCardData[] }>("/flash-sales").then((r) => setFlashSales(r.items));
+    api<{ items: ProductCardData[] }>("/products?sort=trending&pageSize=8").then((r) => setTrending(r.items));
   }, []);
 
   return (
@@ -48,6 +52,17 @@ export default function HomePage() {
         </section>
       )}
 
+      {flashSales.length > 0 && (
+        <section className="mt-10">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="section-title text-red-600">⚡ Flash sales</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {flashSales.map((p) => <ProductCard key={p.slug} product={p} />)}
+          </div>
+        </section>
+      )}
+
       {featured.length > 0 && (
         <section className="mt-10">
           <div className="mb-3 flex items-center justify-between">
@@ -56,6 +71,18 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {featured.map((p) => <ProductCard key={p.slug} product={p} />)}
+          </div>
+        </section>
+      )}
+
+      {trending.length > 0 && (
+        <section className="mt-10">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="section-title">Trending now</h2>
+            <Link href="/products?sort=trending" className="link text-sm">See all</Link>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {trending.map((p) => <ProductCard key={p.slug} product={p} />)}
           </div>
         </section>
       )}

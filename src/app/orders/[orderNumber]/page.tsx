@@ -12,18 +12,58 @@ import { PAYMENT_METHODS, MOMO_NETWORKS } from "@/lib/constants";
 type OrderDetail = {
   orderNumber: string; status: string; createdAt: string;
   recipientName: string; phone: string; region: string; city: string; area: string; streetLine: string; deliveryInstructions: string;
-  subtotal: number; deliveryFee: number; total: number;
+  subtotal: number; deliveryFee: number; discountAmount: number; total: number;
   payment: { status: string; method: string; momoNetwork: string } | null;
   vendorOrders: {
-    id: string; status: string; subtotal: number; deliveryFee: number; total: number;
+    id: string; status: string; subtotal: number; deliveryFee: number; discountAmount: number; total: number;
     vendor: { businessName: string; slug: string };
-    items: { id: string; nameSnapshot: string; imageSnapshot: string; priceSnapshot: number; quantity: number }[];
+    items: { id: string; productId: string; nameSnapshot: string; imageSnapshot: string; priceSnapshot: number; quantity: number; review: { id: string } | null }[];
     delivery: {
       status: string; otpCode: string | null; assignedAt: string | null; pickedUpAt: string | null; outForDeliveryAt: string | null; deliveredAt: string | null;
       agent: { user: { name: string; phone: string } } | null;
     } | null;
   }[];
 };
+
+function ReviewForm({ orderItemId, onDone, toast }: { orderItemId: string; onDone: () => void; toast: (text: string, tone?: "ok" | "err") => void }) {
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api("/reviews", { method: "POST", body: { orderItemId, rating, title: title || undefined, body: body || undefined } });
+      toast("Review posted — thank you!");
+      onDone();
+    } catch (e: any) {
+      toast(e.message, "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) return <button onClick={() => setOpen(true)} className="link text-xs">Write a review</button>;
+
+  return (
+    <form onSubmit={submit} className="mt-2 space-y-2 rounded-xl border border-[var(--border)] p-3">
+      <div className="flex gap-1 text-xl">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" onClick={() => setRating(n)} className={n <= rating ? "text-amber-500" : "text-zinc-300"}>★</button>
+        ))}
+      </div>
+      <input className="input" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} />
+      <textarea className="input" placeholder="Tell others about this product (optional)" value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={2000} />
+      <div className="flex gap-2">
+        <button className="btn-primary btn-sm" disabled={busy}>{busy ? "Posting…" : "Submit review"}</button>
+        <button type="button" onClick={() => setOpen(false)} className="btn-ghost btn-sm">Cancel</button>
+      </div>
+    </form>
+  );
+}
 
 const DELIVERY_STATUS_LABEL: Record<string, string> = {
   pending_assignment: "Looking for a delivery agent…",
@@ -150,15 +190,29 @@ function OrderDetailBody() {
           </div>
           <div className="space-y-2">
             {vo.items.map((item) => (
-              <div key={item.id} className="flex justify-between text-sm">
-                <span>{item.nameSnapshot} × {item.quantity}</span>
-                <span>{formatMoney(item.priceSnapshot * item.quantity)}</span>
+              <div key={item.id} className="border-b border-[var(--border)] pb-2 last:border-b-0">
+                <div className="flex justify-between text-sm">
+                  <span>{item.nameSnapshot} × {item.quantity}</span>
+                  <span>{formatMoney(item.priceSnapshot * item.quantity)}</span>
+                </div>
+                {vo.status === "delivered" && (
+                  item.review ? (
+                    <p className="muted mt-1 text-xs">✓ You reviewed this item</p>
+                  ) : (
+                    <ReviewForm orderItemId={item.id} onDone={load} toast={toast} />
+                  )
+                )}
               </div>
             ))}
           </div>
           <div className="muted mt-2 flex justify-between border-t border-[var(--border)] pt-2 text-xs">
             <span>Delivery</span><span>{formatMoney(vo.deliveryFee)}</span>
           </div>
+          {vo.discountAmount > 0 && (
+            <div className="flex justify-between text-xs text-emerald-700">
+              <span>Coupon discount</span><span>-{formatMoney(vo.discountAmount)}</span>
+            </div>
+          )}
 
           {vo.delivery && (
             <div className="mt-3 border-t border-[var(--border)] pt-3">
@@ -180,6 +234,9 @@ function OrderDetailBody() {
       <div className="card space-y-2 p-5">
         <div className="flex justify-between text-sm"><span className="muted">Subtotal</span><span>{formatMoney(order.subtotal)}</span></div>
         <div className="flex justify-between text-sm"><span className="muted">Delivery</span><span>{formatMoney(order.deliveryFee)}</span></div>
+        {order.discountAmount > 0 && (
+          <div className="flex justify-between text-sm text-emerald-700"><span>Coupon discount</span><span>-{formatMoney(order.discountAmount)}</span></div>
+        )}
         <div className="flex justify-between border-t border-[var(--border)] pt-2 font-bold"><span>Total</span><span>{formatMoney(order.total)}</span></div>
       </div>
     </div>

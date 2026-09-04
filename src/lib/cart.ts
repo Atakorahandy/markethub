@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { activeFlashSalesByProduct, effectiveUnitPrice } from "./pricing";
 
 /** Loads a user's cart with live product/vendor data joined, and computes
  *  per-vendor + grand totals server-side. Never trust a client-supplied
@@ -20,6 +21,7 @@ export async function loadCartSummary(userId: string) {
     ? await prisma.productVariant.findMany({ where: { id: { in: variantIds } } })
     : [];
   const variantById = new Map(variants.map((v) => [v.id, v]));
+  const flashSaleByProduct = await activeFlashSalesByProduct(prisma, items.map((i) => i.productId));
 
   const lines = items.map((item) => {
     const variant = item.variantId ? variantById.get(item.variantId) ?? null : null;
@@ -27,7 +29,9 @@ export async function loadCartSummary(userId: string) {
       item.product.status !== "active" ||
       item.product.vendor.status !== "approved" ||
       (variant ? variant.stock <= 0 : item.product.stock <= 0);
-    const unitPrice = variant?.priceOverride ?? item.product.discountPrice ?? item.product.price;
+    const basePrice = variant?.priceOverride ?? item.product.discountPrice ?? item.product.price;
+    const flashSalePrice = flashSaleByProduct.get(item.productId) ?? null;
+    const unitPrice = effectiveUnitPrice(basePrice, flashSalePrice);
     const availableStock = variant ? variant.stock : item.product.stock;
     const quantity = Math.min(item.quantity, Math.max(availableStock, 0)) || item.quantity;
     return {
@@ -39,6 +43,7 @@ export async function loadCartSummary(userId: string) {
       variantId: variant?.id ?? null,
       variantLabel: variant?.label ?? null,
       unitPrice,
+      onFlashSale: unitPrice === flashSalePrice && flashSalePrice != null && flashSalePrice < basePrice,
       quantity: item.quantity,
       availableStock,
       unavailable,

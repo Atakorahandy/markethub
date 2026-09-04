@@ -14,7 +14,7 @@ const querySchema = z.object({
   vendor: z.string().trim().max(80).optional(), // vendor slug
   minPrice: z.coerce.number().int().min(0).optional(), // cedis
   maxPrice: z.coerce.number().int().min(0).optional(), // cedis
-  sort: z.enum(["relevance", "newest", "price_asc", "price_desc"]).default("relevance"),
+  sort: z.enum(["relevance", "newest", "price_asc", "price_desc", "trending"]).default("relevance"),
 });
 
 export const GET = handler(async (req: Request) => {
@@ -42,6 +42,7 @@ export const GET = handler(async (req: Request) => {
     query.sort === "newest" ? { createdAt: "desc" as const }
     : query.sort === "price_asc" ? { price: "asc" as const }
     : query.sort === "price_desc" ? { price: "desc" as const }
+    : query.sort === "trending" ? { viewCount: "desc" as const }
     : [{ isFeatured: "desc" as const }, { createdAt: "desc" as const }];
 
   const [items, total] = await Promise.all([

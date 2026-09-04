@@ -69,7 +69,10 @@ function CartBody() {
                   <div className="flex-1">
                     <Link href={`/product/${line.productSlug}`} className="text-sm font-medium hover:underline">{line.productName}</Link>
                     {line.variantLabel && <p className="muted text-xs">{line.variantLabel}</p>}
-                    <p className="font-semibold text-brand-700">{formatMoney(line.unitPrice)}</p>
+                    <p className="font-semibold text-brand-700">
+                      {formatMoney(line.unitPrice)}
+                      {line.onFlashSale && <span className="badge ml-2 bg-red-100 text-red-700">flash sale</span>}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <input

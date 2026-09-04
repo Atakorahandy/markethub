@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace + Phase 3
 // Shopping + Phase 4 Payments + Phase 5 Vendor Platform + Phase 6 Delivery +
-// Phase 7 Admin)
+// Phase 7 Admin + Phase 8 Advanced)
 //
 // Original multi-vendor marketplace, inspired by common e-commerce platform
 // functionality — no copied branding, UI, or code from any specific product.
@@ -36,6 +36,22 @@
 // commission ledger entries are reversed), and CmsPage (simple published/
 // draft content pages — plain text, no HTML/markdown, rendered at
 // /page/[slug]).
+//
+// Phase 8 adds: Review (one per purchased OrderItem, gated on the owning
+// VendorOrder being "delivered"; recomputes Product.ratingAvg/ratingCount
+// and Vendor.ratingAvg/ratingCount — those fields existed since Phase 1/2
+// as an already-anticipated cache), Coupon (vendor-scoped only — no
+// platform-wide coupon spanning multiple vendors' baskets, which would need
+// cross-vendor discount proration; usage limits are enforced by counting
+// existing VendorOrder rows at redemption time, not a mutable counter),
+// FlashSale (a time-boxed override price on one product — every price read
+// in cart/checkout/product-page now goes through `effectiveUnitPrice()` in
+// src/lib/pricing.ts instead of reading Product.price directly), and
+// SupportTicket/SupportMessage (a threaded ticket doubles as this phase's
+// "chat" — async messaging, not a real-time socket connection, which would
+// be disproportionate new infrastructure for what the spec item needs).
+// "Recommendations" needed no new schema — related-products and trending
+// are query-only, reusing Product.viewCount which was already tracked.
 //
 // PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
 //
@@ -87,6 +103,10 @@ model User {
   cartItems      CartItem[]
   wishlistItems  WishlistItem[]
   orders         Order[]
+  reviews        Review[]
+  ticketsOpened  SupportTicket[]   @relation("TicketsOpened")
+  ticketsAssigned SupportTicket[]  @relation("TicketsAssigned")
+  supportMessages SupportMessage[]
 }
 
 // Global permission catalogue rows (seeded from src/lib/rbac.ts PERMISSIONS).
@@ -203,6 +223,9 @@ model Vendor {
   vendorOrders VendorOrder[]
   walletLedger WalletLedgerEntry[]
   withdrawals  Withdrawal[]
+  reviews      Review[]
+  coupons      Coupon[]
+  flashSales   FlashSale[]
 
   @@index([status])
   @@index([city, region])
@@ -295,6 +318,8 @@ model Product {
   wishlistItems WishlistItem[]
   orderItems    OrderItem[]
   inventoryTransactions InventoryTransaction[]
+  reviews       Review[]
+  flashSales    FlashSale[]
 
   @@index([vendorId])
   @@index([categoryId])
@@ -399,6 +424,7 @@ model Order {
   deliveryInstructions String
   subtotal Int // pesewas, sum of vendor subtotals
   deliveryFee Int // pesewas, sum of vendor delivery fees
+  discountAmount Int @default(0) // pesewas, sum of vendor coupon discounts (Phase 8)
   total    Int // pesewas
   status   String   @default("pending_payment") // pending_payment | paid | cancelled (Phase 5 adds processing/shipped/delivered)
   createdAt DateTime @default(now())
@@ -421,6 +447,8 @@ model VendorOrder {
   vendorId    String
   subtotal    Int // pesewas
   deliveryFee Int // pesewas
+  discountAmount Int   @default(0) // pesewas, this vendor's coupon discount (Phase 8)
+  couponId    String?
   total       Int // pesewas
   // pending_payment | paid | processing | shipped | delivered | cancelled |
   // refunded (admin-issued, Phase 7 — see Refund)
@@ -431,6 +459,7 @@ model VendorOrder {
 
   order    Order                      @relation(fields: [orderId], references: [id], onDelete: Cascade)
   vendor   Vendor                     @relation(fields: [vendorId], references: [id])
+  coupon   Coupon?                    @relation(fields: [couponId], references: [id])
   items    OrderItem[]
   history  VendorOrderStatusHistory[]
   delivery Delivery?
@@ -438,6 +467,7 @@ model VendorOrder {
 
   @@index([orderId])
   @@index([vendorId])
+  @@index([couponId])
 }
 
 // Immutable fulfilment timeline (spec §21) — append-only, one row per
@@ -469,6 +499,7 @@ model OrderItem {
 
   vendorOrder VendorOrder @relation(fields: [vendorOrderId], references: [id], onDelete: Cascade)
   product     Product     @relation(fields: [productId], references: [id])
+  review      Review?
 
   @@index([vendorOrderId])
 }
@@ -713,4 +744,130 @@ model CmsPage {
   updatedAt DateTime @updatedAt
 
   @@index([published])
+}
+
+// ── Reviews (Phase 8) ────────────────────────────────────────────────────────
+
+// One review per purchased line item — `orderItemId` both proves the
+// purchase and gates duplicate reviews of the same purchase (a customer who
+// buys the same product twice may review each purchase separately). Only
+// creatable once the owning VendorOrder is "delivered".
+model Review {
+  id              String    @id @default(cuid())
+  productId       String
+  vendorId        String // denormalized for cheap vendor-scoped listing/moderation
+  customerId      String
+  orderItemId     String    @unique
+  rating          Int // 1-5
+  title           String    @default("")
+  body            String    @default("")
+  status          String    @default("published") // published | hidden (admin moderation)
+  vendorReply     String    @default("")
+  vendorRepliedAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendor    Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  customer  User      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+// ── Promotions: coupons & flash sales (Phase 8) ─────────────────────────────
+
+// Vendor-scoped only — a platform-wide coupon spanning multiple vendors'
+// baskets would need cross-vendor discount proration, which is a real
+// refinement, not a Phase 8 concern (called out in README). Usage limits
+// are enforced by counting existing VendorOrder rows referencing this
+// coupon at redemption time, never a mutable counter, matching the
+// project's ledger-truth discipline elsewhere.
+model Coupon {
+  id               String    @id @default(cuid())
+  vendorId         String
+  code             String // stored upper-cased
+  type             String // percent | fixed
+  value            Int // percent: 1-100; fixed: pesewas
+  minSubtotal      Int       @default(0) // pesewas — vendor's basket subtotal must reach this
+  maxDiscount      Int? // pesewas cap, percent coupons only
+  startsAt         DateTime?
+  endsAt           DateTime?
+  usageLimit       Int? // total redemptions across all customers; null = unlimited
+  perCustomerLimit Int? // null = unlimited
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
+  vendor       Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorOrders VendorOrder[]
+
+  @@unique([vendorId, code])
+  @@index([vendorId])
+}
+
+// A time-boxed override price on one product. The effective price a
+// customer pays (cart, checkout, product page) is always
+// `effectiveUnitPrice()` in src/lib/pricing.ts, never Product.price/
+// discountPrice read directly — that's the one place flash-sale pricing is
+// allowed to matter.
+model FlashSale {
+  id        String   @id @default(cuid())
+  vendorId  String
+  productId String
+  salePrice Int // pesewas
+  startsAt  DateTime
+  endsAt    DateTime
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([vendorId])
+  @@index([startsAt, endsAt])
+}
+
+// ── Support (Phase 8) ────────────────────────────────────────────────────────
+
+// A threaded support ticket doubles as this phase's "chat" — async
+// messaging rather than a real-time socket connection, which would be a
+// disproportionate amount of new infrastructure for what the spec's Phase 8
+// item actually needs. A customer (or vendor/agent) opens one; staff with
+// `disputes.manage` (support_agent, platform_admin, finance_officer) work
+// the queue.
+model SupportTicket {
+  id           String   @id @default(cuid())
+  subject      String
+  category     String   @default("general") // general | order | payment | vendor | other
+  status       String   @default("open") // open | pending | resolved | closed
+  openedById   String
+  openedByName String   @default("")
+  assignedToId String?
+  orderNumber  String   @default("") // optional free-text reference, not a hard FK
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  openedBy   User             @relation("TicketsOpened", fields: [openedById], references: [id], onDelete: Cascade)
+  assignedTo User?            @relation("TicketsAssigned", fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages   SupportMessage[]
+
+  @@index([status])
+  @@index([openedById])
+}
+
+model SupportMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  authorId   String?
+  authorName String   @default("")
+  authorRole String   @default("customer") // customer | staff
+  body       String
+  createdAt  DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
 }

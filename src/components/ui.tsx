@@ -31,6 +31,9 @@ const STATUS_TONE: Record<string, string> = {
   refunded: "bg-orange-100 text-orange-800",
   published: "bg-emerald-100 text-emerald-800",
   unpublished: "bg-zinc-200 text-zinc-700",
+  open: "bg-amber-100 text-amber-800",
+  resolved: "bg-emerald-100 text-emerald-800",
+  closed: "bg-zinc-200 text-zinc-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {

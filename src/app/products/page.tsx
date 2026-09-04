@@ -13,6 +13,7 @@ type Brand = { id: string; slug: string; name: string };
 const SORTS = [
   { key: "relevance", label: "Relevance" },
   { key: "newest", label: "Newest" },
+  { key: "trending", label: "Trending" },
   { key: "price_asc", label: "Price: low to high" },
   { key: "price_desc", label: "Price: high to low" },
 ];

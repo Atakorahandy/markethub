@@ -7,19 +7,28 @@ import { ShopChrome } from "@/components/shop-chrome";
 import { useSession } from "@/components/session";
 import { useCart } from "@/components/cart-context";
 import { Spinner, useToast } from "@/components/ui";
+import { ProductCard, ProductCardData } from "@/components/product-card";
 import { api } from "@/lib/client";
 import { formatMoney } from "@/lib/money";
 import { parseStringArray, parseStringRecord } from "@/lib/json";
 
+type Review = { id: string; rating: number; title: string; body: string; vendorReply: string; vendorRepliedAt: string | null; createdAt: string; customer: { name: string } };
+
 type ProductDetail = {
   id: string; slug: string; name: string; description: string; shortDescription: string;
   price: number; discountPrice: number | null; stock: number; images: string; tags: string; specifications: string;
-  ratingAvg: number; ratingCount: number;
+  ratingAvg: number; ratingCount: number; activeFlashSalePrice: number | null;
   vendor: { businessName: string; slug: string; city: string; region: string; ratingAvg: number; ratingCount: number };
   category: { name: string; slug: string };
   brand: { name: string; slug: string } | null;
   variants: { id: string; label: string; priceOverride: number | null; stock: number }[];
+  reviews: Review[];
+  related: ProductCardData[];
 };
+
+function Stars({ n }: { n: number }) {
+  return <span className="text-amber-500">{"★".repeat(Math.round(n))}{"☆".repeat(5 - Math.round(n))}</span>;
+}
 
 function ProductDetailBody() {
   const { slug } = useParams<{ slug: string }>();
@@ -48,7 +57,9 @@ function ProductDetailBody() {
   const tags = parseStringArray(product.tags);
   const specs = parseStringRecord(product.specifications);
   const variant = product.variants.find((v) => v.id === selectedVariant);
-  const effectivePrice = variant?.priceOverride ?? product.discountPrice ?? product.price;
+  const basePrice = variant?.priceOverride ?? product.discountPrice ?? product.price;
+  const onFlashSale = product.activeFlashSalePrice != null && product.activeFlashSalePrice < basePrice;
+  const effectivePrice = onFlashSale ? product.activeFlashSalePrice! : basePrice;
   const effectiveStock = variant ? variant.stock : product.stock;
   const outOfStock = effectiveStock <= 0;
 
@@ -131,9 +142,10 @@ function ProductDetailBody() {
             </p>
           </div>
 
+          {onFlashSale && <span className="badge w-fit bg-red-600 text-white">⚡ Flash sale price</span>}
           <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-bold text-brand-700">{formatMoney(effectivePrice)}</span>
-            {product.discountPrice != null && !variant && <span className="muted line-through">{formatMoney(product.price)}</span>}
+            <span className={`text-2xl font-bold ${onFlashSale ? "text-red-600" : "text-brand-700"}`}>{formatMoney(effectivePrice)}</span>
+            {(onFlashSale || (product.discountPrice != null && !variant)) && <span className="muted line-through">{formatMoney(onFlashSale ? basePrice : product.price)}</span>}
           </div>
 
           <p className={outOfStock ? "text-sm font-medium text-red-600" : "text-sm font-medium text-emerald-600"}>
@@ -203,6 +215,42 @@ function ProductDetailBody() {
           </div>
         )}
       </div>
+
+      <div className="mt-10 card p-5">
+        <h2 className="section-title mb-3">Reviews {product.ratingCount > 0 && <span className="muted text-sm font-normal">({product.ratingAvg.toFixed(1)} average, {product.ratingCount} review{product.ratingCount === 1 ? "" : "s"})</span>}</h2>
+        {product.reviews.length === 0 ? (
+          <p className="muted text-sm">No reviews yet — be the first to review this product after your order is delivered.</p>
+        ) : (
+          <div className="space-y-4">
+            {product.reviews.map((r) => (
+              <div key={r.id} className="border-t border-[var(--border)] pt-4 first:border-t-0 first:pt-0">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">{r.customer.name}</p>
+                  <Stars n={r.rating} />
+                </div>
+                <p className="muted text-xs">{new Date(r.createdAt).toLocaleDateString()}</p>
+                {r.title && <p className="mt-1 text-sm font-medium">{r.title}</p>}
+                {r.body && <p className="text-sm">{r.body}</p>}
+                {r.vendorReply && (
+                  <div className="mt-2 rounded-xl bg-black/5 p-3 text-sm">
+                    <p className="font-medium">Seller reply</p>
+                    <p>{r.vendorReply}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {product.related.length > 0 && (
+        <div className="mt-10">
+          <h2 className="section-title mb-3">You might also like</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {product.related.map((p) => <ProductCard key={p.slug} product={p} />)}
+          </div>
+        </div>
+      )}
     </>
   );
 }

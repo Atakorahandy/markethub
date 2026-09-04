@@ -6,7 +6,7 @@ import { useSession } from "./session";
 
 export type CartLine = {
   id: string; productId: string; productSlug: string; productName: string; image: string | null;
-  variantId: string | null; variantLabel: string | null; unitPrice: number; quantity: number;
+  variantId: string | null; variantLabel: string | null; unitPrice: number; onFlashSale: boolean; quantity: number;
   availableStock: number; unavailable: boolean; exceedsStock: boolean; lineTotal: number;
   vendor: { id: string; businessName: string; slug: string; status: string };
 };

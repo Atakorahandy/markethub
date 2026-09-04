@@ -27,6 +27,10 @@ function CheckoutBody() {
   const [momoNetwork, setMomoNetwork] = useState<MomoNetwork>("mtn");
   const [clientRequestId] = useState(() => crypto.randomUUID());
   const [placing, setPlacing] = useState(false);
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; vendorName: string; discountAmount: number } | null>(null);
+  const [couponErr, setCouponErr] = useState("");
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
 
   useEffect(() => {
     if (!sessionLoading && !me?.user) router.replace("/login?next=/checkout");
@@ -50,6 +54,27 @@ function CheckoutBody() {
     return <EmptyState title="Your cart needs attention" hint="Some items are unavailable or exceed stock. Fix your cart before checking out." />;
   }
 
+  async function applyCoupon() {
+    if (!couponInput.trim()) return;
+    setApplyingCoupon(true);
+    setCouponErr("");
+    try {
+      const res = await api<{ vendorName: string; discountAmount: number }>("/cart/coupon", { method: "POST", body: { code: couponInput } });
+      setCoupon({ code: couponInput.trim(), vendorName: res.vendorName, discountAmount: res.discountAmount });
+    } catch (e: any) {
+      setCoupon(null);
+      setCouponErr(e.message);
+    } finally {
+      setApplyingCoupon(false);
+    }
+  }
+
+  function removeCoupon() {
+    setCoupon(null);
+    setCouponInput("");
+    setCouponErr("");
+  }
+
   async function placeOrder() {
     if (!addressId) {
       toast("Select a delivery address", "err");
@@ -59,7 +84,10 @@ function CheckoutBody() {
     try {
       const order = await api<{ orderNumber: string; payment: { authorizationUrl: string } }>("/checkout", {
         method: "POST",
-        body: { addressId, clientRequestId, paymentMethod, momoNetwork: paymentMethod === "momo" ? momoNetwork : undefined },
+        body: {
+          addressId, clientRequestId, paymentMethod, momoNetwork: paymentMethod === "momo" ? momoNetwork : undefined,
+          couponCode: coupon?.code,
+        },
       });
       await refreshCart();
       if (order.payment?.authorizationUrl) {
@@ -145,13 +173,36 @@ function CheckoutBody() {
             You&apos;ll be redirected to complete payment securely. We never see or store your card or Mobile Money PIN.
           </p>
         </section>
+
+        <section className="card p-5">
+          <h2 className="mb-3 font-semibold">4. Coupon code</h2>
+          {coupon ? (
+            <div className="flex items-center justify-between rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm">
+              <span>
+                <strong>{coupon.code.toUpperCase()}</strong> applied — {formatMoney(coupon.discountAmount)} off your {coupon.vendorName} items
+              </span>
+              <button onClick={removeCoupon} className="link text-xs">Remove</button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input className="input" placeholder="Enter code" value={couponInput} onChange={(e) => setCouponInput(e.target.value)} />
+              <button onClick={applyCoupon} disabled={applyingCoupon || !couponInput.trim()} className="btn-ghost btn-sm shrink-0">
+                {applyingCoupon ? "Checking…" : "Apply"}
+              </button>
+            </div>
+          )}
+          {couponErr && <p className="mt-2 text-sm text-red-600">{couponErr}</p>}
+        </section>
       </div>
 
       <aside className="card h-fit space-y-3 p-5">
         <h2 className="font-bold">Total</h2>
         <div className="flex justify-between text-sm"><span className="muted">Subtotal</span><span>{formatMoney(cart.subtotal)}</span></div>
         <div className="flex justify-between text-sm"><span className="muted">Delivery</span><span>{formatMoney(cart.deliveryFee)}</span></div>
-        <div className="flex justify-between border-t border-[var(--border)] pt-3 font-bold"><span>Total</span><span>{formatMoney(cart.total)}</span></div>
+        {coupon && <div className="flex justify-between text-sm text-emerald-700"><span>Coupon discount</span><span>-{formatMoney(coupon.discountAmount)}</span></div>}
+        <div className="flex justify-between border-t border-[var(--border)] pt-3 font-bold">
+          <span>Total</span><span>{formatMoney(cart.total - (coupon?.discountAmount ?? 0))}</span>
+        </div>
         <button onClick={placeOrder} disabled={placing || !addressId} className="btn-primary w-full">
           {placing ? "Redirecting to payment…" : "Place order & pay"}
         </button>
