@@ -111,6 +111,13 @@ export const POST = handler(async (req: Request) => {
       },
     });
 
+    await tx.inventoryTransaction.createMany({
+      data: lines.map((l) => ({
+        productId: l.productId, variantId: l.variantId, type: "sale",
+        quantity: -l.quantity, orderId: created.id, note: `Order ${created.orderNumber}`,
+      })),
+    });
+
     await tx.cartItem.deleteMany({ where: { userId: s.userId } });
     return created;
   });

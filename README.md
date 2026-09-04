@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 4 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 5 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -31,7 +31,7 @@ no copied branding, UI, or code.
 - Checkout: `/checkout` — address selection, per-vendor order review, idempotent submit (a client-generated UUID means a double-click or retry returns the same order instead of creating a duplicate). Stock is checked and decremented atomically inside a DB transaction (`stock: { gte: qty }` conditional update, not read-then-write) so two customers can never oversell the last unit.
 - Orders: `/orders` (history), `/orders/[orderNumber]` (detail, cancel-while-unpaid with automatic stock restoration).
 
-## Phase 4 — Payments (this release)
+## Phase 4 — Payments
 
 - Database: `Payment` (one per Order), `PaymentTransaction` (append-only log of every initiate/verify/webhook attempt — an audit trail independent of the mutable `Payment` row), `PaymentWebhook` (idempotency + replay protection for gateway callbacks).
 - Provider-agnostic gateway layer (`src/lib/payments`): a `PaymentProvider` interface with `initiate` / `verify` / `parseWebhook`, selected by `PAYMENT_PROVIDER` env var. Two providers ship:
@@ -39,9 +39,18 @@ no copied branding, UI, or code.
   - **paystack** — cards + Mobile Money (MTN, Telecel, AirtelTigo) for Ghana. Set `PAYMENT_PROVIDER=paystack` + `PAYSTACK_SECRET_KEY` and register `/api/payments/webhook` in the Paystack dashboard.
 - Checkout now opens a real payment after placing the order (`POST /api/checkout` creates the order **and** initiates payment in one call) and redirects to the gateway's `authorizationUrl`. `/orders/[orderNumber]` shows a "Pay now" retry for any order still `pending_payment` (abandoned checkout, failed attempt) — each retry opens a fresh payment reference against the same order.
 - **A gateway result is never trusted from the client.** `verifyAndSettle()` always re-fetches the transaction from the gateway itself before marking anything paid; the Paystack webhook's signature is verified over the raw request body (HMAC-SHA512, timing-safe compare) and, even after a valid signature, the transaction is re-verified against the API rather than trusting the webhook payload's status/amount. An amount or currency mismatch between what the gateway reports and what the order expects throws instead of settling (`spec §78` — the classic amount-manipulation attack). Settlement itself is idempotent: replays (duplicate webhook, a second "I've paid" click) are detected and become silent no-ops, verified in testing by re-submitting an already-successful mock settlement and confirming `paidAt` doesn't move and the order isn't touched twice.
-- `Order.status` gains `paid` alongside `pending_payment`/`cancelled`; `VendorOrder.status` mirrors it. Vendor-side handling of a paid order (fulfilment, shipping) is Phase 5.
+- `Order.status` gains `paid` alongside `pending_payment`/`cancelled`; `VendorOrder.status` mirrors it.
 
-**Deliberately not built yet:** delivery jobs, reviews, coupons, disputes, wallets, product-approval moderation, vendor-side order fulfilment (Phase 5), refunds, image upload (image fields take a URL — object storage is a later phase). These are later phases and would be premature to scaffold now — see the spec's phased plan.
+## Phase 5 — Vendor Platform (this release)
+
+- Database: `VendorOrderStatusHistory` (immutable fulfilment timeline per spec §21), `InventoryTransaction` (a ledger of every stock movement — sale/return/adjustment — separate from the fast mutable `Product.stock` counter), `WalletLedgerEntry` (a vendor's balance is **always** the sum of this ledger, never a mutable running total, per spec §30), `Withdrawal` (vendor payout requests, admin-approved).
+- Order fulfilment: `VendorOrder.status` now advances `paid → processing → shipped → delivered`, one step at a time, at `/vendor/orders` (list, filterable) and `/vendor/orders/[id]` (detail, advance-status action, status history timeline).
+- Wallet: `/vendor/wallet` shows the live balance and recent ledger activity. Marking a `VendorOrder` **delivered** credits the vendor's wallet with two paired entries — a gross "sale" credit (subtotal + delivery fee) and a "commission" debit (`Vendor.commissionBps`, or the `DEFAULT_COMMISSION_BPS` platform default) — so the platform's cut is auditable, not just netted away silently.
+- Withdrawals: a vendor requests one from their wallet page (funds are reserved immediately via a debit ledger entry, so the same balance can't be withdrawn twice); `/admin/withdrawals` lets an admin approve → mark paid out, or reject (which reverses the hold with a `withdrawal_reversal` ledger entry, verified in testing to restore the exact prior balance). Payout bank/Mobile Money details live on `/vendor/store`.
+- Admin can set a per-vendor commission override from `/admin/vendors` (falls back to the platform default when unset).
+- Inventory: every stock-changing event — a sale at checkout, a return on cancellation, a vendor's manual stock edit — writes an `InventoryTransaction`, not just an update to the counter. The vendor products list flags anything at or below its low-stock threshold.
+
+**Deliberately not built yet:** delivery jobs, reviews, coupons, disputes, product-approval moderation, refunds, image upload (image fields take a URL — object storage is a later phase), low-stock notifications (a visual badge exists; push/email/SMS alerts are Phase 8's notification system). These are later phases and would be premature to scaffold now — see the spec's phased plan.
 
 ## Getting started
 
@@ -124,8 +133,8 @@ provisioned yet.
 1. **Foundation** — done.
 2. **Marketplace** — done.
 3. **Shopping** — done.
-4. **Payments** — this release.
-5. **Vendor platform** — inventory, order fulfilment, wallet, commissions, withdrawals.
+4. **Payments** — done.
+5. **Vendor platform** — this release.
 6. **Delivery** — assignment, tracking, proof of delivery, OTP confirmation.
 7. **Admin** — full dashboard, moderation, refunds, reports, CMS.
 8. **Advanced** — recommendations, flash sales, coupons, chat, support, analytics.

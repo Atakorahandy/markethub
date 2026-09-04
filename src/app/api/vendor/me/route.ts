@@ -9,6 +9,7 @@ import { audit } from "@/lib/audit";
 const SELECT = {
   id: true, businessName: true, slug: true, status: true, rejectionNote: true,
   description: true, logoUrl: true, bannerUrl: true, city: true, region: true, createdAt: true,
+  payoutBank: true, payoutAccount: true, commissionBps: true,
 };
 
 export const GET = handler(async (req: Request) => {
@@ -24,6 +25,8 @@ const schema = z.object({
   description: z.string().trim().max(2000).optional(),
   logoUrl: z.string().url().max(500).nullable().optional(),
   bannerUrl: z.string().url().max(500).nullable().optional(),
+  payoutBank: z.string().trim().max(120).optional(),
+  payoutAccount: z.string().trim().max(60).optional(),
 });
 
 export const PATCH = handler(async (req: Request) => {

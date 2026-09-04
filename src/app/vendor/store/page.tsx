@@ -7,6 +7,7 @@ import { Spinner, useToast, StatusBadge } from "@/components/ui";
 type VendorStore = {
   id: string; businessName: string; slug: string; status: string; description: string;
   logoUrl: string | null; bannerUrl: string | null; city: string; region: string;
+  payoutBank: string; payoutAccount: string; commissionBps: number | null;
 };
 
 export default function VendorStorePage() {
@@ -14,6 +15,8 @@ export default function VendorStorePage() {
   const [description, setDescription] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [bannerUrl, setBannerUrl] = useState("");
+  const [payoutBank, setPayoutBank] = useState("");
+  const [payoutAccount, setPayoutAccount] = useState("");
   const [busy, setBusy] = useState(false);
   const { toast, node } = useToast();
 
@@ -23,6 +26,8 @@ export default function VendorStorePage() {
       setDescription(v.description);
       setLogoUrl(v.logoUrl ?? "");
       setBannerUrl(v.bannerUrl ?? "");
+      setPayoutBank(v.payoutBank);
+      setPayoutAccount(v.payoutAccount);
     }, () => setStore(null));
   }, []);
 
@@ -30,7 +35,7 @@ export default function VendorStorePage() {
     e.preventDefault();
     setBusy(true);
     try {
-      await api("/vendor/me", { method: "PATCH", body: { description, logoUrl: logoUrl || null, bannerUrl: bannerUrl || null } });
+      await api("/vendor/me", { method: "PATCH", body: { description, logoUrl: logoUrl || null, bannerUrl: bannerUrl || null, payoutBank, payoutAccount } });
       toast("Store profile saved");
     } catch (e: any) {
       toast(e.message, "err");
@@ -68,6 +73,24 @@ export default function VendorStorePage() {
           <input className="input" value={bannerUrl} onChange={(e) => setBannerUrl(e.target.value)} placeholder="https://…" />
         </div>
       </div>
+
+      <div className="card space-y-4 p-5">
+        <div>
+          <p className="font-semibold">Payout details</p>
+          <p className="muted text-sm">
+            Where your withdrawals get sent. {store.commissionBps != null && <>Your commission rate: <strong>{(store.commissionBps / 100).toFixed(1)}%</strong>.</>}
+          </p>
+        </div>
+        <div>
+          <label className="label">Bank or Mobile Money provider</label>
+          <input className="input" value={payoutBank} onChange={(e) => setPayoutBank(e.target.value)} placeholder="e.g. GCB Bank or MTN Mobile Money" />
+        </div>
+        <div>
+          <label className="label">Account / phone number</label>
+          <input className="input" value={payoutAccount} onChange={(e) => setPayoutAccount(e.target.value)} placeholder="Account number or MoMo number" />
+        </div>
+      </div>
+
       <button className="btn-primary" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
     </form>
   );

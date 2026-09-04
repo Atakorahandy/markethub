@@ -1,17 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace + Phase 3
-// Shopping + Phase 4 Payments)
+// Shopping + Phase 4 Payments + Phase 5 Vendor Platform)
 //
 // Original multi-vendor marketplace, inspired by common e-commerce platform
 // functionality — no copied branding, UI, or code from any specific product.
 //
-// Phase 4 adds: Payment (one per Order), PaymentTransaction (an append-only
-// log of every initiate/verify/webhook attempt), PaymentWebhook (idempotency
-// + replay protection for gateway callbacks). A payment provider is never
-// hard-coded — see src/lib/payments — and a gateway result is NEVER trusted
-// until re-verified server-side against the gateway itself (never from the
-// client redirect or the webhook body alone). Vendor-side order fulfilment
-// (Phase 5) and delivery assignment (Phase 6) are still not modelled — see
+// Phase 5 adds: VendorOrder fulfilment (paid → processing → shipped →
+// delivered) with an immutable VendorOrderStatusHistory; InventoryTransaction
+// (a ledger of every stock movement, not just the mutable Product.stock
+// counter); WalletLedgerEntry (a vendor's balance is ALWAYS the sum of its
+// ledger, never a mutable running total) credited when a VendorOrder is
+// marked delivered, split into a gross "sale" entry and a "commission" debit
+// so the platform's cut is auditable; Withdrawal (vendor payout requests,
+// admin-approved). Delivery assignment (Phase 6) is still not modelled — see
 // README.md.
 //
 // PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
@@ -178,6 +179,8 @@ model Vendor {
   userRoles   UserRole[]
   products    Product[]
   vendorOrders VendorOrder[]
+  walletLedger WalletLedgerEntry[]
+  withdrawals  Withdrawal[]
 
   @@index([status])
   @@index([city, region])
@@ -264,6 +267,7 @@ model Product {
   cartItems     CartItem[]
   wishlistItems WishlistItem[]
   orderItems    OrderItem[]
+  inventoryTransactions InventoryTransaction[]
 
   @@index([vendorId])
   @@index([categoryId])
@@ -383,7 +387,7 @@ model Order {
 }
 
 // One vendor's slice of an Order — what that vendor sees and fulfils
-// independently (fulfilment UI itself is Phase 5).
+// independently.
 model VendorOrder {
   id          String   @id @default(cuid())
   orderId     String
@@ -391,16 +395,35 @@ model VendorOrder {
   subtotal    Int // pesewas
   deliveryFee Int // pesewas
   total       Int // pesewas
-  status      String   @default("pending_payment") // mirrors Order.status until Phase 5 diverges them
+  // pending_payment | paid | processing | shipped | delivered | cancelled
+  status      String   @default("pending_payment")
+  walletCreditedAt DateTime? // set once, when this vendor's earnings hit their wallet
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  order  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  vendor Vendor      @relation(fields: [vendorId], references: [id])
-  items  OrderItem[]
+  order    Order                      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor   Vendor                     @relation(fields: [vendorId], references: [id])
+  items    OrderItem[]
+  history  VendorOrderStatusHistory[]
 
   @@index([orderId])
   @@index([vendorId])
+}
+
+// Immutable fulfilment timeline (spec §21) — append-only, one row per
+// transition, so "what happened and when" is never lost to an update.
+model VendorOrderStatusHistory {
+  id            String   @id @default(cuid())
+  vendorOrderId String
+  status        String
+  note          String   @default("")
+  actorId       String?
+  actorName     String   @default("")
+  createdAt     DateTime @default(now())
+
+  vendorOrder VendorOrder @relation(fields: [vendorOrderId], references: [id], onDelete: Cascade)
+
+  @@index([vendorOrderId])
 }
 
 model OrderItem {
@@ -470,6 +493,65 @@ model PaymentWebhook {
   createdAt   DateTime  @default(now())
 
   @@unique([provider, eventId])
+}
+
+// ── Vendor platform: inventory, wallet, withdrawals ─────────────────────────
+
+// A ledger of every stock movement — Product.stock is a fast mutable
+// counter for reads, this is the durable record of why it changed
+// (spec §27). Never inferred; always written alongside the stock update.
+model InventoryTransaction {
+  id        String   @id @default(cuid())
+  productId String
+  variantId String?
+  type      String // sale | return | restock | adjustment
+  quantity  Int // signed: negative for sale, positive for return/restock
+  note      String   @default("")
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+// A vendor's balance is ALWAYS the sum of this ledger — never a mutable
+// running total (spec §30). "sale" and "commission" are written as two
+// separate entries per delivered order so the platform's cut is auditable.
+model WalletLedgerEntry {
+  id            String   @id @default(cuid())
+  vendorId      String
+  type          String // sale | commission | withdrawal | withdrawal_reversal | adjustment
+  amount        Int // pesewas, signed (credit positive, debit negative)
+  balanceAfter  Int // pesewas — snapshot of the running balance at write time
+  vendorOrderId String?
+  withdrawalId  String?
+  note          String   @default("")
+  createdAt     DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+}
+
+model Withdrawal {
+  id            String    @id @default(cuid())
+  vendorId      String
+  amount        Int // pesewas
+  status        String    @default("pending") // pending | approved | rejected | completed
+  // Payout destination snapshot at request time — the live Vendor row may change later.
+  payoutBank    String
+  payoutAccount String
+  note          String    @default("")
+  reviewNote    String    @default("")
+  processedById String?
+  requestedAt   DateTime  @default(now())
+  processedAt   DateTime?
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@index([status])
 }
 
 // ── Delivery agents ──────────────────────────────────────────────────────────

@@ -9,3 +9,9 @@ export function formatMoney(pesewas: number, currency = "GHS"): string {
   const s = (abs / 100).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${sign}${currency} ${s}`;
 }
+
+/** basis points → multiplier fraction. 1000 bps = 0.10 */
+export const bps = (basisPoints: number): number => basisPoints / 10_000;
+
+/** Apply a bps rate to a pesewa amount, rounding to the nearest pesewa. */
+export const applyBps = (pesewas: number, basisPoints: number): number => Math.round(pesewas * bps(basisPoints));

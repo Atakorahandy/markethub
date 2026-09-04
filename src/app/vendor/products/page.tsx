@@ -7,7 +7,7 @@ import { Spinner, EmptyState, useToast, StatusBadge } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 
 type ProductRow = {
-  id: string; name: string; price: number; discountPrice: number | null; stock: number; status: string;
+  id: string; name: string; price: number; discountPrice: number | null; stock: number; lowStockThreshold: number; status: string;
   category: { name: string }; brand: { name: string } | null;
 };
 
@@ -53,7 +53,10 @@ export default function VendorProductsPage() {
                   <td className="td font-medium">{p.name}</td>
                   <td className="td">{p.category.name}{p.brand ? ` · ${p.brand.name}` : ""}</td>
                   <td className="td">{formatMoney(p.discountPrice ?? p.price)}</td>
-                  <td className="td">{p.stock}</td>
+                  <td className="td">
+                    {p.stock}
+                    {p.stock <= p.lowStockThreshold && <span className="badge ml-1 bg-amber-100 text-amber-800">low</span>}
+                  </td>
                   <td className="td"><StatusBadge status={p.status} /></td>
                   <td className="td text-right">
                     <Link href={`/vendor/products/${p.id}`} className="link mr-3 text-xs">Edit</Link>

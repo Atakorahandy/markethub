@@ -50,24 +50,34 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
     throw Errors.validation({ discountPrice: "Discount price must be lower than the regular price." });
   }
 
-  const updated = await prisma.product.update({
-    where: { id },
-    data: {
-      ...(body.name !== undefined ? { name: body.name } : {}),
-      ...(body.categoryId !== undefined ? { categoryId: body.categoryId } : {}),
-      ...(body.brandId !== undefined ? { brandId: body.brandId } : {}),
-      ...(body.sku !== undefined ? { sku: body.sku } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.shortDescription !== undefined ? { shortDescription: body.shortDescription } : {}),
-      ...(price !== undefined ? { price } : {}),
-      ...(discountPrice !== undefined ? { discountPrice } : {}),
-      ...(body.stock !== undefined ? { stock: body.stock } : {}),
-      ...(body.lowStockThreshold !== undefined ? { lowStockThreshold: body.lowStockThreshold } : {}),
-      ...(body.images !== undefined ? { images: JSON.stringify(body.images) } : {}),
-      ...(body.tags !== undefined ? { tags: JSON.stringify(body.tags) } : {}),
-      ...(body.status !== undefined ? { status: body.status } : {}),
-      ...(body.isFeatured !== undefined ? { isFeatured: body.isFeatured } : {}),
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const u = await tx.product.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.categoryId !== undefined ? { categoryId: body.categoryId } : {}),
+        ...(body.brandId !== undefined ? { brandId: body.brandId } : {}),
+        ...(body.sku !== undefined ? { sku: body.sku } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.shortDescription !== undefined ? { shortDescription: body.shortDescription } : {}),
+        ...(price !== undefined ? { price } : {}),
+        ...(discountPrice !== undefined ? { discountPrice } : {}),
+        ...(body.stock !== undefined ? { stock: body.stock } : {}),
+        ...(body.lowStockThreshold !== undefined ? { lowStockThreshold: body.lowStockThreshold } : {}),
+        ...(body.images !== undefined ? { images: JSON.stringify(body.images) } : {}),
+        ...(body.tags !== undefined ? { tags: JSON.stringify(body.tags) } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.isFeatured !== undefined ? { isFeatured: body.isFeatured } : {}),
+      },
+    });
+    // Manual stock edits (vs. sale/return, which happen elsewhere) are logged
+    // as an adjustment so the inventory ledger stays a complete record.
+    if (body.stock !== undefined && body.stock !== product.stock) {
+      await tx.inventoryTransaction.create({
+        data: { productId: id, type: "adjustment", quantity: body.stock - product.stock, note: "Manual stock edit by vendor" },
+      });
+    }
+    return u;
   });
 
   await audit({ req, actorId: session.userId, actorName: session.name, action: "product.updated", entityType: "product", entityId: id });

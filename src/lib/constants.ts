@@ -43,3 +43,9 @@ export const MOMO_NETWORKS = [
   { key: "telecel", label: "Telecel Cash" },
   { key: "airteltigo", label: "AirtelTigo Money" },
 ] as const;
+
+/** Platform default commission — used when Vendor.commissionBps is null.
+ *  Admin can override per vendor; a global settings page is a later phase. */
+export const DEFAULT_COMMISSION_BPS = 1000; // 10%
+
+export const VENDOR_ORDER_STATUS_FLOW = ["paid", "processing", "shipped", "delivered"] as const;

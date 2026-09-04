@@ -6,21 +6,25 @@ import { api } from "@/lib/client";
 import { Spinner, StatusBadge } from "@/components/ui";
 import { Metric } from "@/components/console-shell";
 import { VENDOR_STATUS_LABEL } from "@/lib/constants";
+import { formatMoney } from "@/lib/money";
 
 type VendorSummary = { id: string; businessName: string; slug: string; status: string; rejectionNote: string; city: string; region: string };
 
 export default function VendorDashboard() {
   const [vendor, setVendor] = useState<VendorSummary | null | undefined>(undefined);
   const [productCount, setProductCount] = useState<number | null>(null);
+  const [pendingOrders, setPendingOrders] = useState<number | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
 
   useEffect(() => {
     api<VendorSummary>("/vendor/me").then(setVendor, () => setVendor(null));
   }, []);
 
   useEffect(() => {
-    if (vendor?.status === "approved") {
-      api<{ total: number }>("/vendor/products?pageSize=1").then((r) => setProductCount(r.total));
-    }
+    if (vendor?.status !== "approved") return;
+    api<{ total: number }>("/vendor/products?pageSize=1").then((r) => setProductCount(r.total));
+    api<{ total: number }>("/vendor/orders?status=paid&pageSize=1").then((r) => setPendingOrders(r.total));
+    api<{ balance: number }>("/vendor/wallet").then((r) => setBalance(r.balance));
   }, [vendor]);
 
   if (vendor === undefined) return <Spinner />;
@@ -47,10 +51,13 @@ export default function VendorDashboard() {
             <>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <Metric label="Products" value={productCount ?? "…"} />
+                <Metric label="New orders" value={pendingOrders ?? "…"} sub="awaiting fulfilment" />
+                <Metric label="Wallet balance" value={balance != null ? formatMoney(balance) : "…"} />
               </div>
-              <div className="flex gap-3">
-                <Link href="/vendor/products" className="btn-primary btn-sm">Manage products</Link>
-                <Link href="/vendor/store" className="btn-ghost btn-sm">Edit store profile</Link>
+              <div className="flex flex-wrap gap-3">
+                <Link href="/vendor/orders" className="btn-primary btn-sm">View orders</Link>
+                <Link href="/vendor/products" className="btn-ghost btn-sm">Manage products</Link>
+                <Link href="/vendor/wallet" className="btn-ghost btn-sm">Wallet</Link>
                 <Link href={`/store/${vendor.slug}`} className="btn-ghost btn-sm">View storefront</Link>
               </div>
             </>

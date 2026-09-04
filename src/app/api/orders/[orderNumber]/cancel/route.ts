@@ -23,6 +23,9 @@ export const POST = handler(async (req: Request, { params }: { params: { orderNu
         } else {
           await tx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } });
         }
+        await tx.inventoryTransaction.create({
+          data: { productId: item.productId, variantId: item.variantId, type: "return", quantity: item.quantity, orderId: order.id, note: `Order ${order.orderNumber} cancelled` },
+        });
       }
     }
     await tx.vendorOrder.updateMany({ where: { orderId: order.id }, data: { status: "cancelled" } });
