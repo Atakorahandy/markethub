@@ -49,3 +49,7 @@ export const MOMO_NETWORKS = [
 export const DEFAULT_COMMISSION_BPS = 1000; // 10%
 
 export const VENDOR_ORDER_STATUS_FLOW = ["paid", "processing", "shipped", "delivered"] as const;
+
+/** picked_up/out_for_delivery are plain agent-driven transitions; the final
+ *  delivered step requires the OTP confirm endpoint instead. */
+export const DELIVERY_STATUS_FLOW = ["assigned", "picked_up", "out_for_delivery", "delivered"] as const;

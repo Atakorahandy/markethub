@@ -1,19 +1,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace + Phase 3
-// Shopping + Phase 4 Payments + Phase 5 Vendor Platform)
+// Shopping + Phase 4 Payments + Phase 5 Vendor Platform + Phase 6 Delivery)
 //
 // Original multi-vendor marketplace, inspired by common e-commerce platform
 // functionality — no copied branding, UI, or code from any specific product.
 //
-// Phase 5 adds: VendorOrder fulfilment (paid → processing → shipped →
+// Phase 5 added: VendorOrder fulfilment (paid → processing → shipped →
 // delivered) with an immutable VendorOrderStatusHistory; InventoryTransaction
 // (a ledger of every stock movement, not just the mutable Product.stock
 // counter); WalletLedgerEntry (a vendor's balance is ALWAYS the sum of its
 // ledger, never a mutable running total) credited when a VendorOrder is
 // marked delivered, split into a gross "sale" entry and a "commission" debit
 // so the platform's cut is auditable; Withdrawal (vendor payout requests,
-// admin-approved). Delivery assignment (Phase 6) is still not modelled — see
-// README.md.
+// admin-approved).
+//
+// Phase 6 adds: Delivery (one job per VendorOrder, created automatically when
+// a vendor marks their order "shipped"), self-serve agent assignment (any
+// verified, online agent can accept an unassigned job from the pool), an OTP
+// proof-of-delivery step (spec §35 — the code is shown on the customer's
+// order page since no SMS provider is wired up yet; Phase 8's notification
+// system would send it for real), and DeliveryAgentLedgerEntry (mirrors
+// WalletLedgerEntry's append-only design). Simplification, called out where
+// it's modelled: an agent's delivery earning is a flat amount independent of
+// the vendor's own wallet credit — Phase 5 already gives the vendor the full
+// delivery fee, so this does not subtract from it; there is no unified
+// platform ledger yet to net the two against each other correctly.
 //
 // PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
 //
@@ -405,6 +416,7 @@ model VendorOrder {
   vendor   Vendor                     @relation(fields: [vendorId], references: [id])
   items    OrderItem[]
   history  VendorOrderStatusHistory[]
+  delivery Delivery?
 
   @@index([orderId])
   @@index([vendorId])
@@ -571,8 +583,58 @@ model DeliveryAgent {
   updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries Delivery[]
+  ledger     DeliveryAgentLedgerEntry[]
 
   @@index([status, verification])
+}
+
+// One delivery job per VendorOrder — created automatically when a vendor
+// marks their order "shipped". Sits in the unassigned pool until a verified,
+// online agent accepts it.
+model Delivery {
+  id            String    @id @default(cuid())
+  vendorOrderId String    @unique
+  agentId       String?
+  // pending_assignment | assigned | picked_up | out_for_delivery | delivered | failed
+  status        String    @default("pending_assignment")
+  // Proof of delivery (spec §35) — a 4-digit code the customer sees on their
+  // order page and reads out to the agent at handoff. No SMS provider is
+  // wired up yet (Phase 8), so it's surfaced in-app instead of texted.
+  otpCode       String
+  otpVerifiedAt DateTime?
+  agentEarning  Int // pesewas — snapshotted from VendorOrder.deliveryFee at assignment time
+  failureReason String    @default("")
+  assignedAt        DateTime?
+  pickedUpAt         DateTime?
+  outForDeliveryAt   DateTime?
+  deliveredAt        DateTime?
+  failedAt           DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  vendorOrder VendorOrder    @relation(fields: [vendorOrderId], references: [id], onDelete: Cascade)
+  agent       DeliveryAgent? @relation(fields: [agentId], references: [id])
+
+  @@index([status])
+  @@index([agentId])
+}
+
+// A delivery agent's balance is ALWAYS the sum of this ledger — same
+// discipline as WalletLedgerEntry for vendors.
+model DeliveryAgentLedgerEntry {
+  id           String   @id @default(cuid())
+  agentId      String
+  type         String // delivery_earning | adjustment
+  amount       Int // pesewas, signed
+  balanceAfter Int // pesewas
+  deliveryId   String?
+  note         String   @default("")
+  createdAt    DateTime @default(now())
+
+  agent DeliveryAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
 }
 
 // ── Audit log ────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { customAlphabet } from "nanoid";
 
 const orderCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
 const paymentSuffix = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 8);
+const numericCode = customAlphabet("0123456789", 4);
 
 /** Public order number, e.g. MH-7K2M9Q */
 export const orderNumber = (): string => `MH-${orderCode()}`;
@@ -10,6 +11,9 @@ export const orderNumber = (): string => `MH-${orderCode()}`;
  *  (dash-joined) so the mock pay page can recover it: reference.split("-")
  *  .slice(0, 2).join("-") === the order's orderNumber. */
 export const paymentReference = (order: string): string => `${order}-${paymentSuffix()}`;
+
+/** 4-digit proof-of-delivery confirmation code (spec §35). */
+export const deliveryOtp = (): string => numericCode();
 
 export const slugify = (s: string): string =>
   s

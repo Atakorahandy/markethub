@@ -5,9 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { handler, ok, parseBody, Errors } from "@/lib/api";
 import { requireAuth, can } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
-import { VENDOR_ORDER_STATUS_FLOW, DEFAULT_COMMISSION_BPS } from "@/lib/constants";
-import { applyBps } from "@/lib/money";
-import { walletMove } from "@/lib/wallet";
+import { VENDOR_ORDER_STATUS_FLOW } from "@/lib/constants";
+import { creditVendorForDelivery, ensureDeliveryJob } from "@/lib/fulfilment";
 import { audit } from "@/lib/audit";
 
 const schema = z.object({
@@ -36,14 +35,11 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
       data: { vendorOrderId: id, status: body.status, note: body.note ?? "", actorId: s.userId, actorName: s.name },
     });
 
-    if (body.status === "delivered" && !vendorOrder.walletCreditedAt) {
-      const commissionBps = vendorOrder.vendor.commissionBps ?? DEFAULT_COMMISSION_BPS;
-      const gross = vendorOrder.subtotal + vendorOrder.deliveryFee;
-      const commission = applyBps(vendorOrder.subtotal, commissionBps);
-
-      await walletMove(tx, { vendorId: vendorOrder.vendorId, type: "sale", amount: gross, note: `Order ${id}`, vendorOrderId: id });
-      await walletMove(tx, { vendorId: vendorOrder.vendorId, type: "commission", amount: -commission, note: `Platform commission (${commissionBps / 100}%)`, vendorOrderId: id });
-      await tx.vendorOrder.update({ where: { id }, data: { walletCreditedAt: new Date() } });
+    if (body.status === "shipped") {
+      await ensureDeliveryJob(tx, id, vendorOrder.deliveryFee);
+    }
+    if (body.status === "delivered") {
+      await creditVendorForDelivery(tx, vendorOrder);
     }
 
     return vo;

@@ -18,7 +18,20 @@ type OrderDetail = {
     id: string; status: string; subtotal: number; deliveryFee: number; total: number;
     vendor: { businessName: string; slug: string };
     items: { id: string; nameSnapshot: string; imageSnapshot: string; priceSnapshot: number; quantity: number }[];
+    delivery: {
+      status: string; otpCode: string | null; assignedAt: string | null; pickedUpAt: string | null; outForDeliveryAt: string | null; deliveredAt: string | null;
+      agent: { user: { name: string; phone: string } } | null;
+    } | null;
   }[];
+};
+
+const DELIVERY_STATUS_LABEL: Record<string, string> = {
+  pending_assignment: "Looking for a delivery agent…",
+  assigned: "Delivery agent assigned",
+  picked_up: "Picked up from vendor",
+  out_for_delivery: "Out for delivery",
+  delivered: "Delivered",
+  failed: "Delivery attempt failed",
 };
 
 type PaymentMethod = (typeof PAYMENT_METHODS)[number]["key"];
@@ -146,6 +159,21 @@ function OrderDetailBody() {
           <div className="muted mt-2 flex justify-between border-t border-[var(--border)] pt-2 text-xs">
             <span>Delivery</span><span>{formatMoney(vo.deliveryFee)}</span>
           </div>
+
+          {vo.delivery && (
+            <div className="mt-3 border-t border-[var(--border)] pt-3">
+              <p className="text-sm font-medium">{DELIVERY_STATUS_LABEL[vo.delivery.status] ?? vo.delivery.status}</p>
+              {vo.delivery.agent && (
+                <p className="muted text-xs">Agent: {vo.delivery.agent.user.name} · {vo.delivery.agent.user.phone}</p>
+              )}
+              {vo.delivery.otpCode && (
+                <div className="mt-2 rounded-xl bg-brand-50 p-3 text-center">
+                  <p className="muted text-xs">Give this code to your delivery agent to confirm receipt</p>
+                  <p className="text-2xl font-bold tracking-widest text-brand-700">{vo.delivery.otpCode}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ))}
 

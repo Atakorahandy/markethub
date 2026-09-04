@@ -22,6 +22,11 @@ const STATUS_TONE: Record<string, string> = {
   shipped: "bg-violet-100 text-violet-800",
   delivered: "bg-emerald-100 text-emerald-800",
   completed: "bg-emerald-100 text-emerald-800",
+  assigned: "bg-sky-100 text-sky-800",
+  picked_up: "bg-violet-100 text-violet-800",
+  out_for_delivery: "bg-violet-100 text-violet-800",
+  failed: "bg-red-100 text-red-700",
+  pending_assignment: "bg-amber-100 text-amber-800",
 };
 
 export function StatusBadge({ status }: { status: string }) {

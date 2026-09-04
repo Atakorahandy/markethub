@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 5 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 6 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -41,7 +41,7 @@ no copied branding, UI, or code.
 - **A gateway result is never trusted from the client.** `verifyAndSettle()` always re-fetches the transaction from the gateway itself before marking anything paid; the Paystack webhook's signature is verified over the raw request body (HMAC-SHA512, timing-safe compare) and, even after a valid signature, the transaction is re-verified against the API rather than trusting the webhook payload's status/amount. An amount or currency mismatch between what the gateway reports and what the order expects throws instead of settling (`spec §78` — the classic amount-manipulation attack). Settlement itself is idempotent: replays (duplicate webhook, a second "I've paid" click) are detected and become silent no-ops, verified in testing by re-submitting an already-successful mock settlement and confirming `paidAt` doesn't move and the order isn't touched twice.
 - `Order.status` gains `paid` alongside `pending_payment`/`cancelled`; `VendorOrder.status` mirrors it.
 
-## Phase 5 — Vendor Platform (this release)
+## Phase 5 — Vendor Platform
 
 - Database: `VendorOrderStatusHistory` (immutable fulfilment timeline per spec §21), `InventoryTransaction` (a ledger of every stock movement — sale/return/adjustment — separate from the fast mutable `Product.stock` counter), `WalletLedgerEntry` (a vendor's balance is **always** the sum of this ledger, never a mutable running total, per spec §30), `Withdrawal` (vendor payout requests, admin-approved).
 - Order fulfilment: `VendorOrder.status` now advances `paid → processing → shipped → delivered`, one step at a time, at `/vendor/orders` (list, filterable) and `/vendor/orders/[id]` (detail, advance-status action, status history timeline).
@@ -50,7 +50,16 @@ no copied branding, UI, or code.
 - Admin can set a per-vendor commission override from `/admin/vendors` (falls back to the platform default when unset).
 - Inventory: every stock-changing event — a sale at checkout, a return on cancellation, a vendor's manual stock edit — writes an `InventoryTransaction`, not just an update to the counter. The vendor products list flags anything at or below its low-stock threshold.
 
-**Deliberately not built yet:** delivery jobs, reviews, coupons, disputes, product-approval moderation, refunds, image upload (image fields take a URL — object storage is a later phase), low-stock notifications (a visual badge exists; push/email/SMS alerts are Phase 8's notification system). These are later phases and would be premature to scaffold now — see the spec's phased plan.
+## Phase 6 — Delivery (this release)
+
+- Database: `Delivery` (one job per `VendorOrder`, created automatically the moment a vendor marks their order "shipped"), `DeliveryAgentLedgerEntry` (an agent's balance is likewise always the sum of its ledger — same discipline as the vendor wallet).
+- Self-serve assignment: a verified agent goes online (`/delivery`, toggle) and sees unassigned jobs at `/delivery/pool`. Accepting is an atomic claim (`UPDATE ... WHERE status = 'pending_assignment'`) so two agents racing for the same job can't both win it — verified by design, not just by convention.
+- Fulfilment: `/delivery/deliveries/[id]` advances `assigned → picked_up → out_for_delivery`, then the final step requires **OTP proof of delivery** (spec §35): a 4-digit code, generated when the job is created, shown on the customer's `/orders/[orderNumber]` page (surfaced in-app since there's no SMS provider yet — Phase 8's notification system would text it for real) and typed in by the agent at handoff. A wrong code is rejected server-side with a rate limit bounding how fast it can be guessed (10,000 possible codes).
+- Confirming delivery is one transaction that closes the loop: `VendorOrder.status → delivered` (crediting the vendor's wallet via the *same* helper Phase 5's manual "mark delivered" button uses, guarded by `walletCreditedAt` so whichever path gets there first is the only one that pays out), plus a `delivery_earning` credit to the agent's own ledger, plus freeing the agent (`on_delivery → online`) for the next job. An agent can also report a failed delivery with a reason.
+- Order tracking: the customer's order page now shows a live delivery status line and the agent's name once assigned, alongside the OTP.
+- **Known simplification, called out in the schema:** an agent's delivery earning is a flat amount independent of the vendor's own wallet credit — Phase 5 already gives the vendor the full delivery fee, so this phase does not subtract from it. There's no unified platform ledger yet to net the two against each other; that would be a reasonable Phase 9+ refinement, not a Phase 6 concern.
+
+**Deliberately not built yet:** reviews, coupons, disputes, product-approval moderation, refunds, image upload (image fields take a URL — object storage is a later phase), low-stock notifications (a visual badge exists; push/email/SMS alerts are Phase 8's notification system), a real SMS/email channel for the delivery OTP. These are later phases and would be premature to scaffold now — see the spec's phased plan.
 
 ## Getting started
 
@@ -134,8 +143,8 @@ provisioned yet.
 2. **Marketplace** — done.
 3. **Shopping** — done.
 4. **Payments** — done.
-5. **Vendor platform** — this release.
-6. **Delivery** — assignment, tracking, proof of delivery, OTP confirmation.
+5. **Vendor platform** — done.
+6. **Delivery** — this release.
 7. **Admin** — full dashboard, moderation, refunds, reports, CMS.
 8. **Advanced** — recommendations, flash sales, coupons, chat, support, analytics.
 9. **Security** — OWASP audit, permission/payment/API testing.
