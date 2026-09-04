@@ -1,3 +1,10 @@
+import { customAlphabet } from "nanoid";
+
+const orderCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
+
+/** Public order number, e.g. MH-7K2M9Q */
+export const orderNumber = (): string => `MH-${orderCode()}`;
+
 export const slugify = (s: string): string =>
   s
     .toLowerCase()

@@ -15,6 +15,8 @@ const STATUS_TONE: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-800",
   draft: "bg-zinc-200 text-zinc-700",
   out_of_stock: "bg-amber-100 text-amber-800",
+  pending_payment: "bg-amber-100 text-amber-800",
+  cancelled: "bg-red-100 text-red-700",
 };
 
 export function StatusBadge({ status }: { status: string }) {

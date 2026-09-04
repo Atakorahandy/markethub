@@ -1,13 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace)
+// MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace + Phase 3 Shopping)
 //
 // Original multi-vendor marketplace, inspired by common e-commerce platform
 // functionality — no copied branding, UI, or code from any specific product.
 //
-// Phase 2 adds: categories, brands, products (with simple variants), and
-// public browse/search. Cart, checkout, orders, payments, delivery jobs,
-// reviews, coupons and disputes are later phases and are deliberately NOT
-// modelled yet — see README.md.
+// Phase 3 adds: addresses, cart, wishlist, and orders (with per-vendor
+// splitting — see VendorOrder). Orders are created at checkout WITHOUT a real
+// payment step: status starts at "pending_payment" and stays there. Payment
+// gateway integration (Mobile Money/card, verification, webhooks) that
+// transitions orders to "paid" is Phase 4, deliberately not modelled yet.
+// Vendor-side order fulfilment (Phase 5) and delivery assignment (Phase 6)
+// are also not modelled yet — see README.md.
 //
 // PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
 //
@@ -55,6 +58,10 @@ model User {
   vendorStaff    VendorStaff[]
   ownedVendors   Vendor[]        @relation("VendorOwner")
   deliveryAgent  DeliveryAgent?
+  addresses      Address[]
+  cartItems      CartItem[]
+  wishlistItems  WishlistItem[]
+  orders         Order[]
 }
 
 // Global permission catalogue rows (seeded from src/lib/rbac.ts PERMISSIONS).
@@ -154,16 +161,21 @@ model Vendor {
   payoutBank    String   @default("")
   payoutAccount String   @default("")
   commissionBps Int? // null = platform default
+  // Delivery — flat fee per order to this vendor, pesewas. Region/distance
+  // -based pricing (spec §74) is a later phase; this keeps checkout honest
+  // without pretending distance pricing exists yet.
+  baseDeliveryFee Int    @default(1500)
   // Ratings cache (populated from Phase 8 reviews)
   ratingAvg     Float    @default(0)
   ratingCount   Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  owner     User              @relation("VendorOwner", fields: [ownerId], references: [id])
-  staff     VendorStaff[]
-  userRoles UserRole[]
-  products  Product[]
+  owner       User              @relation("VendorOwner", fields: [ownerId], references: [id])
+  staff       VendorStaff[]
+  userRoles   UserRole[]
+  products    Product[]
+  vendorOrders VendorOrder[]
 
   @@index([status])
   @@index([city, region])
@@ -247,6 +259,9 @@ model Product {
   category Category        @relation(fields: [categoryId], references: [id])
   brand    Brand?          @relation(fields: [brandId], references: [id])
   variants ProductVariant[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+  orderItems    OrderItem[]
 
   @@index([vendorId])
   @@index([categoryId])
@@ -271,6 +286,135 @@ model ProductVariant {
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+}
+
+// ── Addresses, cart & wishlist ──────────────────────────────────────────────
+
+model Address {
+  id                   String   @id @default(cuid())
+  userId               String
+  label                String   @default("home") // home | office | other
+  recipientName        String
+  phone                String
+  region               String
+  city                 String
+  area                 String   @default("")
+  streetLine           String   @default("")
+  gpsAddress           String   @default("") // Ghana Post GPS or similar, optional
+  deliveryInstructions String   @default("")
+  isDefault            Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+// Flat per-user cart line — no separate Cart wrapper: a guest-cart-merge
+// feature would need one, but Phase 3 requires login to shop, so it would be
+// unused ceremony today.
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  variantId String?
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, variantId])
+  @@index([userId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+// ── Orders ───────────────────────────────────────────────────────────────────
+
+// The whole customer purchase, spanning every vendor in the cart at checkout
+// time. Split into one VendorOrder per vendor (spec §22) so each vendor only
+// ever sees their own slice.
+model Order {
+  id              String   @id @default(cuid())
+  orderNumber     String   @unique // e.g. MH-7K2M9Q
+  customerId      String
+  addressId       String
+  clientRequestId String   @unique // idempotency key — prevents duplicate orders on double-submit
+  // Address snapshot — the live Address row may change or be deleted later;
+  // the order must keep showing what was true at checkout time.
+  recipientName        String
+  phone                String
+  region               String
+  city                 String
+  area                 String
+  streetLine           String
+  deliveryInstructions String
+  subtotal Int // pesewas, sum of vendor subtotals
+  deliveryFee Int // pesewas, sum of vendor delivery fees
+  total    Int // pesewas
+  status   String   @default("pending_payment") // pending_payment | cancelled (Phase 4 adds paid/processing/...)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer     User          @relation(fields: [customerId], references: [id])
+  address      Address       @relation(fields: [addressId], references: [id])
+  vendorOrders VendorOrder[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+// One vendor's slice of an Order — what that vendor sees and fulfils
+// independently (fulfilment UI itself is Phase 5).
+model VendorOrder {
+  id          String   @id @default(cuid())
+  orderId     String
+  vendorId    String
+  subtotal    Int // pesewas
+  deliveryFee Int // pesewas
+  total       Int // pesewas
+  status      String   @default("pending_payment") // mirrors Order.status until Phase 4/5 diverge them
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  order  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor Vendor      @relation(fields: [vendorId], references: [id])
+  items  OrderItem[]
+
+  @@index([orderId])
+  @@index([vendorId])
+}
+
+model OrderItem {
+  id            String @id @default(cuid())
+  vendorOrderId String
+  productId     String
+  variantId     String?
+  // Snapshots — never re-read the live Product for historical orders.
+  nameSnapshot  String
+  imageSnapshot String  @default("")
+  priceSnapshot Int // pesewas, per unit
+  quantity      Int
+
+  vendorOrder VendorOrder @relation(fields: [vendorOrderId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id])
+
+  @@index([vendorOrderId])
 }
 
 // ── Delivery agents ──────────────────────────────────────────────────────────

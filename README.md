@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 2 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 3 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -15,7 +15,7 @@ no copied branding, UI, or code.
 - User management: admin console can search/suspend/activate users, and approve/reject/suspend vendor & delivery-agent applications.
 - Basic UI system: design tokens, shared components, a storefront shell (header/footer) and a console shell reused by the admin, vendor and delivery-agent dashboards.
 
-## Phase 2 — Marketplace (this release)
+## Phase 2 — Marketplace
 
 - Database: `Category` (self-referencing, two levels), `Brand`, `Product` (integer-pesewas pricing, JSON-string images/tags/specs), simple `ProductVariant`.
 - Public storefront: `/products` (search + category/brand/price filters + sort + pagination), `/product/[slug]` (gallery, variants, specs, vendor card), `/store/[slug]` (vendor storefront), `/categories`, home page now shows real categories and new arrivals.
@@ -23,7 +23,16 @@ no copied branding, UI, or code.
 - Admin console: `/admin/categories`, `/admin/brands` (create/delete taxonomy).
 - All catalog reads exclude non-approved vendors and non-active products server-side — a suspended vendor's listings disappear from the storefront even if a product row still exists.
 
-**Deliberately not built yet:** cart, checkout, orders, payments, delivery jobs, reviews, coupons, disputes, wallets, product-approval moderation, image upload (image fields take a URL — object storage is a later phase). These are later phases and would be premature to scaffold now — see the spec's phased plan.
+## Phase 3 — Shopping (this release)
+
+- Database: `Address`, flat per-user `CartItem`/`WishlistItem` (no guest-cart wrapper — Phase 3 requires login to shop), `Order` + `VendorOrder` + `OrderItem` (multi-vendor split per spec §22, with a full address/price/name snapshot on every order so later catalog edits never rewrite history).
+- Cart & wishlist: `/cart` (per-vendor grouping, live stock/availability checks, delivery fee per vendor), `/wishlist` (move-to-cart), header cart badge shared via `CartProvider`. Add to Cart / Buy Now / wishlist are wired up on the product page.
+- Addresses: `/account/addresses` full CRUD, Ghana region picker, one default address.
+- Checkout: `/checkout` — address selection, per-vendor order review, idempotent submit (a client-generated UUID means a double-click or retry returns the same order instead of creating a duplicate). Stock is checked and decremented atomically inside a DB transaction (`stock: { gte: qty }` conditional update, not read-then-write) so two customers can never oversell the last unit.
+- Orders: `/orders` (history), `/orders/[orderNumber]` (detail, cancel-while-unpaid with automatic stock restoration).
+- **No payment step yet.** Orders are created with `status: "pending_payment"` and stay there — Mobile Money/card integration is Phase 4, exactly as scoped in the spec's own phase split (§4: Phase 3 is cart/checkout/orders, Phase 4 is payments). The checkout and order pages say this plainly rather than pretending a payment happened.
+
+**Deliberately not built yet:** payments, delivery jobs, reviews, coupons, disputes, wallets, product-approval moderation, vendor-side order fulfilment (Phase 5), image upload (image fields take a URL — object storage is a later phase). These are later phases and would be premature to scaffold now — see the spec's phased plan.
 
 ## Getting started
 
@@ -103,9 +112,9 @@ provisioned yet.
 
 ## Roadmap
 
-1. **Foundation** — this release.
-2. **Marketplace** — categories, products, search, filters, vendor storefronts.
-3. **Shopping** — cart, wishlist, addresses, checkout, orders.
+1. **Foundation** — done.
+2. **Marketplace** — done.
+3. **Shopping** — this release.
 4. **Payments** — Mobile Money & card payments, verification, webhooks.
 5. **Vendor platform** — inventory, order fulfilment, wallet, commissions, withdrawals.
 6. **Delivery** — assignment, tracking, proof of delivery, OTP confirmation.

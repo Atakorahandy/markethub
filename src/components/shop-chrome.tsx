@@ -4,9 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SessionProvider, useSession } from "./session";
+import { CartProvider, useCart } from "./cart-context";
 
 function Header() {
   const { me, loading, logout } = useSession();
+  const { cart } = useCart();
   const router = useRouter();
   const [q, setQ] = useState("");
 
@@ -30,6 +32,11 @@ function Header() {
           <Link href="/products" className="link">Shop</Link>
           {!loading && me?.user ? (
             <>
+              <Link href="/wishlist" className="link">Wishlist</Link>
+              <Link href="/cart" className="link relative">
+                Cart
+                {!!cart?.itemCount && <span className="badge ml-1 bg-brand-600 text-white">{cart.itemCount}</span>}
+              </Link>
               <Link href="/account" className="link">{me.user.name.split(" ")[0]}</Link>
               <button onClick={logout} className="link text-red-600">Sign out</button>
             </>
@@ -60,9 +67,11 @@ function Footer() {
 export function ShopChrome({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
-      <Header />
-      <div className="mx-auto max-w-6xl px-4 py-6">{children}</div>
-      <Footer />
+      <CartProvider>
+        <Header />
+        <div className="mx-auto max-w-6xl px-4 py-6">{children}</div>
+        <Footer />
+      </CartProvider>
     </SessionProvider>
   );
 }

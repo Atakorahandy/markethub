@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShopChrome } from "@/components/shop-chrome";
 import { useSession } from "@/components/session";
@@ -26,6 +27,12 @@ function AccountBody() {
           <div><p className="muted text-xs">Account type</p><p className="font-medium capitalize">{me.user.kind.replace("_", " ")}</p></div>
         </div>
         <button onClick={logout} className="btn-danger btn-sm">Sign out</button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <Link href="/orders" className="card p-4 text-center font-medium hover:border-brand-500">My orders</Link>
+        <Link href="/wishlist" className="card p-4 text-center font-medium hover:border-brand-500">Wishlist</Link>
+        <Link href="/account/addresses" className="card p-4 text-center font-medium hover:border-brand-500">Addresses</Link>
       </div>
 
       {me.vendorIds.length > 0 && (
