@@ -9,8 +9,11 @@ import { useCart } from "@/components/cart-context";
 import { Spinner, EmptyState, useToast } from "@/components/ui";
 import { api } from "@/lib/client";
 import { formatMoney } from "@/lib/money";
+import { PAYMENT_METHODS, MOMO_NETWORKS } from "@/lib/constants";
 
 type Address = { id: string; label: string; recipientName: string; phone: string; region: string; city: string; area: string; streetLine: string; isDefault: boolean };
+type PaymentMethod = (typeof PAYMENT_METHODS)[number]["key"];
+type MomoNetwork = (typeof MOMO_NETWORKS)[number]["key"];
 
 function CheckoutBody() {
   const { me, loading: sessionLoading } = useSession();
@@ -20,6 +23,8 @@ function CheckoutBody() {
 
   const [addresses, setAddresses] = useState<Address[] | null>(null);
   const [addressId, setAddressId] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [momoNetwork, setMomoNetwork] = useState<MomoNetwork>("mtn");
   const [clientRequestId] = useState(() => crypto.randomUUID());
   const [placing, setPlacing] = useState(false);
 
@@ -52,9 +57,16 @@ function CheckoutBody() {
     }
     setPlacing(true);
     try {
-      const order = await api<{ orderNumber: string }>("/checkout", { method: "POST", body: { addressId, clientRequestId } });
+      const order = await api<{ orderNumber: string; payment: { authorizationUrl: string } }>("/checkout", {
+        method: "POST",
+        body: { addressId, clientRequestId, paymentMethod, momoNetwork: paymentMethod === "momo" ? momoNetwork : undefined },
+      });
       await refreshCart();
-      router.push(`/orders/${order.orderNumber}`);
+      if (order.payment?.authorizationUrl) {
+        window.location.href = order.payment.authorizationUrl;
+      } else {
+        router.push(`/orders/${order.orderNumber}`);
+      }
     } catch (e: any) {
       toast(e.message, "err");
       setPlacing(false);
@@ -107,10 +119,32 @@ function CheckoutBody() {
           </div>
         </section>
 
-        <p className="muted text-sm">
-          MarketHub Phase 4 adds Mobile Money / card payment. For now, placing an order reserves the
-          items and creates an unpaid order you can review under My Orders.
-        </p>
+        <section className="card p-5">
+          <h2 className="mb-3 font-semibold">3. Payment method</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_METHODS.map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setPaymentMethod(m.key)}
+                className={`rounded-xl border px-3 py-2 text-sm font-semibold ${paymentMethod === m.key ? "border-brand-600 bg-brand-50 text-brand-700" : "border-[var(--border)]"}`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {paymentMethod === "momo" && (
+            <div className="mt-3">
+              <label className="label">Network</label>
+              <select className="select" value={momoNetwork} onChange={(e) => setMomoNetwork(e.target.value as MomoNetwork)}>
+                {MOMO_NETWORKS.map((n) => <option key={n.key} value={n.key}>{n.label}</option>)}
+              </select>
+            </div>
+          )}
+          <p className="muted mt-3 text-xs">
+            You&apos;ll be redirected to complete payment securely. We never see or store your card or Mobile Money PIN.
+          </p>
+        </section>
       </div>
 
       <aside className="card h-fit space-y-3 p-5">
@@ -119,7 +153,7 @@ function CheckoutBody() {
         <div className="flex justify-between text-sm"><span className="muted">Delivery</span><span>{formatMoney(cart.deliveryFee)}</span></div>
         <div className="flex justify-between border-t border-[var(--border)] pt-3 font-bold"><span>Total</span><span>{formatMoney(cart.total)}</span></div>
         <button onClick={placeOrder} disabled={placing || !addressId} className="btn-primary w-full">
-          {placing ? "Placing order…" : "Place order"}
+          {placing ? "Redirecting to payment…" : "Place order & pay"}
         </button>
       </aside>
     </div>

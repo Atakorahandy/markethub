@@ -1,16 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace + Phase 3 Shopping)
+// MARKETHUB — data model (Phase 1 Foundation + Phase 2 Marketplace + Phase 3
+// Shopping + Phase 4 Payments)
 //
 // Original multi-vendor marketplace, inspired by common e-commerce platform
 // functionality — no copied branding, UI, or code from any specific product.
 //
-// Phase 3 adds: addresses, cart, wishlist, and orders (with per-vendor
-// splitting — see VendorOrder). Orders are created at checkout WITHOUT a real
-// payment step: status starts at "pending_payment" and stays there. Payment
-// gateway integration (Mobile Money/card, verification, webhooks) that
-// transitions orders to "paid" is Phase 4, deliberately not modelled yet.
-// Vendor-side order fulfilment (Phase 5) and delivery assignment (Phase 6)
-// are also not modelled yet — see README.md.
+// Phase 4 adds: Payment (one per Order), PaymentTransaction (an append-only
+// log of every initiate/verify/webhook attempt), PaymentWebhook (idempotency
+// + replay protection for gateway callbacks). A payment provider is never
+// hard-coded — see src/lib/payments — and a gateway result is NEVER trusted
+// until re-verified server-side against the gateway itself (never from the
+// client redirect or the webhook body alone). Vendor-side order fulfilment
+// (Phase 5) and delivery assignment (Phase 6) are still not modelled — see
+// README.md.
 //
 // PROVIDER: `postgresql` (Neon, matches the rest of the DKay portfolio).
 //
@@ -367,13 +369,14 @@ model Order {
   subtotal Int // pesewas, sum of vendor subtotals
   deliveryFee Int // pesewas, sum of vendor delivery fees
   total    Int // pesewas
-  status   String   @default("pending_payment") // pending_payment | cancelled (Phase 4 adds paid/processing/...)
+  status   String   @default("pending_payment") // pending_payment | paid | cancelled (Phase 5 adds processing/shipped/delivered)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   customer     User          @relation(fields: [customerId], references: [id])
   address      Address       @relation(fields: [addressId], references: [id])
   vendorOrders VendorOrder[]
+  payment      Payment?
 
   @@index([customerId])
   @@index([status])
@@ -388,7 +391,7 @@ model VendorOrder {
   subtotal    Int // pesewas
   deliveryFee Int // pesewas
   total       Int // pesewas
-  status      String   @default("pending_payment") // mirrors Order.status until Phase 4/5 diverge them
+  status      String   @default("pending_payment") // mirrors Order.status until Phase 5 diverges them
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -415,6 +418,58 @@ model OrderItem {
   product     Product     @relation(fields: [productId], references: [id])
 
   @@index([vendorOrderId])
+}
+
+// ── Payments ─────────────────────────────────────────────────────────────────
+
+model Payment {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  provider    String   @default("") // mock | paystack
+  method      String   @default("card") // card | momo
+  momoNetwork String   @default("") // mtn | telecel | airteltigo
+  reference   String   @unique // our reference, passed to the gateway
+  amount      Int // pesewas — authoritative expected amount (= Order.total)
+  currency    String   @default("GHS")
+  status      String   @default("PENDING") // PENDING | PROCESSING | SUCCESSFUL | FAILED | CANCELLED
+  gatewayRef       String   @default("")
+  authorizationUrl String @default("")
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  order        Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactions PaymentTransaction[]
+}
+
+// Append-only log of every initiate/verify/webhook attempt against a
+// Payment — an audit trail independent of the mutable Payment row itself.
+model PaymentTransaction {
+  id        String   @id @default(cuid())
+  paymentId String
+  kind      String // initiate | verify | webhook
+  status    String
+  amount    Int      @default(0)
+  raw       String   @default("{}") // JSON — provider response, secrets stripped
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
+
+// Idempotency + replay protection for gateway webhooks — a provider may
+// legitimately send the same event more than once.
+model PaymentWebhook {
+  id          String    @id @default(cuid())
+  provider    String
+  eventId     String // provider event id / dedupe key
+  signature   String    @default("")
+  processedAt DateTime?
+  payload     String    @default("{}")
+  createdAt   DateTime  @default(now())
+
+  @@unique([provider, eventId])
 }
 
 // ── Delivery agents ──────────────────────────────────────────────────────────

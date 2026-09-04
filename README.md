@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 3 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 4 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -23,16 +23,25 @@ no copied branding, UI, or code.
 - Admin console: `/admin/categories`, `/admin/brands` (create/delete taxonomy).
 - All catalog reads exclude non-approved vendors and non-active products server-side — a suspended vendor's listings disappear from the storefront even if a product row still exists.
 
-## Phase 3 — Shopping (this release)
+## Phase 3 — Shopping
 
 - Database: `Address`, flat per-user `CartItem`/`WishlistItem` (no guest-cart wrapper — Phase 3 requires login to shop), `Order` + `VendorOrder` + `OrderItem` (multi-vendor split per spec §22, with a full address/price/name snapshot on every order so later catalog edits never rewrite history).
 - Cart & wishlist: `/cart` (per-vendor grouping, live stock/availability checks, delivery fee per vendor), `/wishlist` (move-to-cart), header cart badge shared via `CartProvider`. Add to Cart / Buy Now / wishlist are wired up on the product page.
 - Addresses: `/account/addresses` full CRUD, Ghana region picker, one default address.
 - Checkout: `/checkout` — address selection, per-vendor order review, idempotent submit (a client-generated UUID means a double-click or retry returns the same order instead of creating a duplicate). Stock is checked and decremented atomically inside a DB transaction (`stock: { gte: qty }` conditional update, not read-then-write) so two customers can never oversell the last unit.
 - Orders: `/orders` (history), `/orders/[orderNumber]` (detail, cancel-while-unpaid with automatic stock restoration).
-- **No payment step yet.** Orders are created with `status: "pending_payment"` and stay there — Mobile Money/card integration is Phase 4, exactly as scoped in the spec's own phase split (§4: Phase 3 is cart/checkout/orders, Phase 4 is payments). The checkout and order pages say this plainly rather than pretending a payment happened.
 
-**Deliberately not built yet:** payments, delivery jobs, reviews, coupons, disputes, wallets, product-approval moderation, vendor-side order fulfilment (Phase 5), image upload (image fields take a URL — object storage is a later phase). These are later phases and would be premature to scaffold now — see the spec's phased plan.
+## Phase 4 — Payments (this release)
+
+- Database: `Payment` (one per Order), `PaymentTransaction` (append-only log of every initiate/verify/webhook attempt — an audit trail independent of the mutable `Payment` row), `PaymentWebhook` (idempotency + replay protection for gateway callbacks).
+- Provider-agnostic gateway layer (`src/lib/payments`): a `PaymentProvider` interface with `initiate` / `verify` / `parseWebhook`, selected by `PAYMENT_PROVIDER` env var. Two providers ship:
+  - **mock** (default, needs no keys) — a real settlement path with its own hosted-looking page at `/pay/mock/[reference]`, its own HMAC-signed webhook, full transaction/audit logging. Nothing about it is faked client-side; approving fires the exact same webhook-ingestion code a real gateway would.
+  - **paystack** — cards + Mobile Money (MTN, Telecel, AirtelTigo) for Ghana. Set `PAYMENT_PROVIDER=paystack` + `PAYSTACK_SECRET_KEY` and register `/api/payments/webhook` in the Paystack dashboard.
+- Checkout now opens a real payment after placing the order (`POST /api/checkout` creates the order **and** initiates payment in one call) and redirects to the gateway's `authorizationUrl`. `/orders/[orderNumber]` shows a "Pay now" retry for any order still `pending_payment` (abandoned checkout, failed attempt) — each retry opens a fresh payment reference against the same order.
+- **A gateway result is never trusted from the client.** `verifyAndSettle()` always re-fetches the transaction from the gateway itself before marking anything paid; the Paystack webhook's signature is verified over the raw request body (HMAC-SHA512, timing-safe compare) and, even after a valid signature, the transaction is re-verified against the API rather than trusting the webhook payload's status/amount. An amount or currency mismatch between what the gateway reports and what the order expects throws instead of settling (`spec §78` — the classic amount-manipulation attack). Settlement itself is idempotent: replays (duplicate webhook, a second "I've paid" click) are detected and become silent no-ops, verified in testing by re-submitting an already-successful mock settlement and confirming `paidAt` doesn't move and the order isn't touched twice.
+- `Order.status` gains `paid` alongside `pending_payment`/`cancelled`; `VendorOrder.status` mirrors it. Vendor-side handling of a paid order (fulfilment, shipping) is Phase 5.
+
+**Deliberately not built yet:** delivery jobs, reviews, coupons, disputes, wallets, product-approval moderation, vendor-side order fulfilment (Phase 5), refunds, image upload (image fields take a URL — object storage is a later phase). These are later phases and would be premature to scaffold now — see the spec's phased plan.
 
 ## Getting started
 
@@ -114,8 +123,8 @@ provisioned yet.
 
 1. **Foundation** — done.
 2. **Marketplace** — done.
-3. **Shopping** — this release.
-4. **Payments** — Mobile Money & card payments, verification, webhooks.
+3. **Shopping** — done.
+4. **Payments** — this release.
 5. **Vendor platform** — inventory, order fulfilment, wallet, commissions, withdrawals.
 6. **Delivery** — assignment, tracking, proof of delivery, OTP confirmation.
 7. **Admin** — full dashboard, moderation, refunds, reports, CMS.

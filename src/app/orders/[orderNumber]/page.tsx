@@ -7,11 +7,13 @@ import { useSession } from "@/components/session";
 import { Spinner, StatusBadge, useToast } from "@/components/ui";
 import { api } from "@/lib/client";
 import { formatMoney } from "@/lib/money";
+import { PAYMENT_METHODS, MOMO_NETWORKS } from "@/lib/constants";
 
 type OrderDetail = {
   orderNumber: string; status: string; createdAt: string;
   recipientName: string; phone: string; region: string; city: string; area: string; streetLine: string; deliveryInstructions: string;
   subtotal: number; deliveryFee: number; total: number;
+  payment: { status: string; method: string; momoNetwork: string } | null;
   vendorOrders: {
     id: string; status: string; subtotal: number; deliveryFee: number; total: number;
     vendor: { businessName: string; slug: string };
@@ -19,12 +21,18 @@ type OrderDetail = {
   }[];
 };
 
+type PaymentMethod = (typeof PAYMENT_METHODS)[number]["key"];
+type MomoNetwork = (typeof MOMO_NETWORKS)[number]["key"];
+
 function OrderDetailBody() {
   const { orderNumber } = useParams<{ orderNumber: string }>();
   const { me, loading: sessionLoading } = useSession();
   const router = useRouter();
   const [order, setOrder] = useState<OrderDetail | null | undefined>(undefined);
   const [cancelling, setCancelling] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [momoNetwork, setMomoNetwork] = useState<MomoNetwork>("mtn");
   const { toast, node } = useToast();
 
   async function load() {
@@ -50,6 +58,20 @@ function OrderDetailBody() {
     }
   }
 
+  async function payNow() {
+    setPaying(true);
+    try {
+      const res = await api<{ authorizationUrl: string }>(`/orders/${orderNumber}/pay`, {
+        method: "POST",
+        body: { paymentMethod, momoNetwork: paymentMethod === "momo" ? momoNetwork : undefined },
+      });
+      window.location.href = res.authorizationUrl;
+    } catch (e: any) {
+      toast(e.message, "err");
+      setPaying(false);
+    }
+  }
+
   if (sessionLoading || order === undefined) return <div className="flex justify-center py-16"><Spinner /></div>;
   if (!order) return <p className="muted py-16 text-center">This order could not be found.</p>;
 
@@ -64,13 +86,39 @@ function OrderDetailBody() {
         <StatusBadge status={order.status} />
       </div>
 
+      {order.status === "paid" && (
+        <div className="card border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-800">
+          Payment received{order.payment ? ` via ${order.payment.method === "momo" ? "Mobile Money" : "Card"}` : ""}. Your vendor(s) will start preparing your order.
+        </div>
+      )}
+
       {order.status === "pending_payment" && (
-        <div className="card border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
-          This order is unpaid. MarketHub Phase 4 adds Mobile Money / card payment — for now it's held as a
-          placeholder order.
-          <button onClick={cancel} disabled={cancelling} className="btn-danger btn-sm ml-3">
-            {cancelling ? "Cancelling…" : "Cancel order"}
-          </button>
+        <div className="card space-y-3 border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm text-amber-800">
+            This order is awaiting payment{order.payment?.status === "FAILED" ? " — your last attempt failed" : ""}.
+            Items are held for you; complete payment to confirm your order.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_METHODS.map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setPaymentMethod(m.key)}
+                className={`rounded-xl border px-3 py-2 text-sm font-semibold ${paymentMethod === m.key ? "border-brand-600 bg-brand-50 text-brand-700" : "border-[var(--border)] bg-white"}`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {paymentMethod === "momo" && (
+            <select className="select" value={momoNetwork} onChange={(e) => setMomoNetwork(e.target.value as MomoNetwork)}>
+              {MOMO_NETWORKS.map((n) => <option key={n.key} value={n.key}>{n.label}</option>)}
+            </select>
+          )}
+          <div className="flex gap-2">
+            <button onClick={payNow} disabled={paying} className="btn-primary btn-sm">{paying ? "Redirecting…" : "Pay now"}</button>
+            <button onClick={cancel} disabled={cancelling} className="btn-danger btn-sm">{cancelling ? "Cancelling…" : "Cancel order"}</button>
+          </div>
         </div>
       )}
 

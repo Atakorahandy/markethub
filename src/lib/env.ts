@@ -27,4 +27,10 @@ export const env = {
   rateMax: Number(process.env.RATE_LIMIT_MAX ?? 120),
   seedSuperadminEmail: process.env.SEED_SUPERADMIN_EMAIL ?? "admin@markethub.app",
   seedSuperadminPassword: process.env.SEED_SUPERADMIN_PASSWORD ?? "ChangeMe!Admin123",
+  // Payments — provider-agnostic. MOCK needs no keys (default in dev).
+  paymentProvider: (process.env.PAYMENT_PROVIDER ?? "mock").toLowerCase(),
+  paymentCurrency: process.env.PAYMENT_CURRENCY ?? "GHS",
+  paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
+  paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
+  paystackWebhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET || process.env.PAYSTACK_SECRET_KEY || "",
 };

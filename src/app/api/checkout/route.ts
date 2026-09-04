@@ -6,10 +6,14 @@ import { handler, ok, parseBody, Errors } from "@/lib/api";
 import { requireAuth, can } from "@/lib/auth";
 import { orderNumber } from "@/lib/ids";
 import { audit } from "@/lib/audit";
+import { initiatePaymentForOrder } from "@/lib/payments/process";
+import { PAYMENT_METHODS } from "@/lib/constants";
 
 const schema = z.object({
   addressId: z.string().cuid(),
   clientRequestId: z.string().uuid(),
+  paymentMethod: z.enum(PAYMENT_METHODS.map((m) => m.key) as [string, ...string[]]),
+  momoNetwork: z.enum(["mtn", "telecel", "airteltigo"]).optional(),
 });
 
 export const POST = handler(async (req: Request) => {
@@ -20,7 +24,10 @@ export const POST = handler(async (req: Request) => {
   // Idempotency: a retried submit (double-click, network retry) returns the
   // order already created for this key instead of erroring or duplicating it.
   const existing = await prisma.order.findUnique({ where: { clientRequestId: body.clientRequestId } });
-  if (existing) return ok(existing, 200);
+  if (existing) {
+    const payment = await prisma.payment.findUnique({ where: { orderId: existing.id } });
+    return ok({ ...existing, payment: payment ? { reference: payment.reference, authorizationUrl: payment.authorizationUrl } : null }, 200);
+  }
 
   const address = await prisma.address.findUnique({ where: { id: body.addressId } });
   if (!address || address.userId !== s.userId) throw Errors.validation({ addressId: "Select a valid delivery address." });
@@ -109,5 +116,10 @@ export const POST = handler(async (req: Request) => {
   });
 
   await audit({ req, actorId: s.userId, actorName: s.name, action: "order.placed", entityType: "order", entityId: order.id, meta: { orderNumber: order.orderNumber, total: order.total } });
-  return ok(order, 201);
+
+  // Payment is opened with the gateway outside the DB transaction — it's an
+  // external network call and must never hold transaction locks.
+  const payment = await initiatePaymentForOrder(order.id, { method: body.paymentMethod, momoNetwork: body.momoNetwork, email: s.email });
+
+  return ok({ ...order, payment }, 201);
 });

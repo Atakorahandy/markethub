@@ -27,6 +27,7 @@ export const POST = handler(async (req: Request, { params }: { params: { orderNu
     }
     await tx.vendorOrder.updateMany({ where: { orderId: order.id }, data: { status: "cancelled" } });
     await tx.order.update({ where: { id: order.id }, data: { status: "cancelled" } });
+    await tx.payment.updateMany({ where: { orderId: order.id, status: { in: ["PENDING", "PROCESSING"] } }, data: { status: "CANCELLED" } });
   });
 
   await audit({ req, actorId: s.userId, actorName: s.name, action: "order.cancelled", entityType: "order", entityId: order.id, meta: { orderNumber: order.orderNumber } });

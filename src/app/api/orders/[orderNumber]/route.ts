@@ -13,6 +13,7 @@ export const GET = handler(async (req: Request, { params }: { params: { orderNum
       vendorOrders: {
         include: { items: true, vendor: { select: { businessName: true, slug: true, phone: true } } },
       },
+      payment: { select: { status: true, method: true, momoNetwork: true, authorizationUrl: true } },
     },
   });
   if (!order || order.customerId !== s.userId) throw Errors.notFound();

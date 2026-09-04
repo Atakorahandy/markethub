@@ -32,3 +32,14 @@ export const VENDOR_STATUS_LABEL: Record<string, string> = {
   rejected: "Rejected",
   suspended: "Suspended",
 };
+
+export const PAYMENT_METHODS = [
+  { key: "card", label: "Card" },
+  { key: "momo", label: "Mobile Money" },
+] as const;
+
+export const MOMO_NETWORKS = [
+  { key: "mtn", label: "MTN MoMo" },
+  { key: "telecel", label: "Telecel Cash" },
+  { key: "airteltigo", label: "AirtelTigo Money" },
+] as const;

@@ -1,9 +1,15 @@
 import { customAlphabet } from "nanoid";
 
 const orderCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
+const paymentSuffix = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 8);
 
 /** Public order number, e.g. MH-7K2M9Q */
 export const orderNumber = (): string => `MH-${orderCode()}`;
+
+/** Payment reference passed to the gateway. Embeds the order number
+ *  (dash-joined) so the mock pay page can recover it: reference.split("-")
+ *  .slice(0, 2).join("-") === the order's orderNumber. */
+export const paymentReference = (order: string): string => `${order}-${paymentSuffix()}`;
 
 export const slugify = (s: string): string =>
   s
