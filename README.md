@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 8 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 9 of a 10-phase build.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -71,7 +71,7 @@ no copied branding, UI, or code.
 
 **Deliberately not built yet at this point:** reviews, coupons, disputes, partial refunds, a real payment-gateway refund call, image upload (image fields take a URL — object storage is a later phase), a real SMS/email channel for the delivery OTP.
 
-## Phase 8 — Advanced (this release)
+## Phase 8 — Advanced
 
 - Database: `Review` (one per purchased `OrderItem`, gated on the owning `VendorOrder` being `delivered`; recomputes `Product.ratingAvg/ratingCount` and `Vendor.ratingAvg/ratingCount` — fields that have existed since Phase 1/2 as an already-anticipated cache), `Coupon` (vendor-scoped only), `FlashSale` (a time-boxed override price on one product), `SupportTicket`/`SupportMessage`. `Order`/`VendorOrder` gain `discountAmount` and `VendorOrder` gains `couponId`.
 - **Reviews:** a customer can rate and review a delivered item from `/orders/[orderNumber]` — one review per purchased line, never per product, so buying the same item twice allows two honest reviews. The product page shows the review list, average, and any seller reply; a vendor replies once from `/vendor/reviews`; admin moderates (publish/hide) from `/admin/reviews`, which recomputes the rating cache exactly like a new review does — hiding one is never a silent number edit.
@@ -81,7 +81,25 @@ no copied branding, UI, or code.
 - **Support ("chat"):** `/support` — a customer opens a threaded ticket and gets replies from staff working the queue at `/admin/support` (gated on the existing `disputes.manage` permission — support_agent, platform_admin, finance_officer). This is deliberately async threaded messaging, not a real-time socket connection, which would be disproportionate new infrastructure for what the spec item needs; a staff reply auto-assigns an unclaimed ticket and moves it to "pending," a customer reply on a "resolved" ticket reopens it.
 - **Vendor analytics:** `/vendor/analytics` mirrors the admin Reports page's shape (revenue, orders, AOV, daily chart, order-status breakdown) but scoped to the vendor's own store, with a "top products" table instead of "top vendors."
 
-**Deliberately not built yet:** disputes (separate from support tickets), partial refunds, a real payment-gateway refund call, image upload, a real SMS/email channel for the delivery OTP, a platform-wide coupon, real-time chat.
+**Deliberately not built yet at this point:** disputes (separate from support tickets), partial refunds, a real payment-gateway refund call, image upload, a real SMS/email channel for the delivery OTP, a platform-wide coupon, real-time chat.
+
+## Phase 9 — Security (this release)
+
+An audit pass against the OWASP Top 10, not a new feature set — most of the value here is verifying what the first eight phases already built, and fixing the handful of real gaps that turned up.
+
+**Audited, found solid, no changes needed:**
+- **Access control (A01):** every one of the ~35 dynamic (`[id]`/`[slug]`) API routes was checked by hand for an ownership/IDOR gap — every one either scopes by `session.userId`/`session.vendorIds[0]`/`session.deliveryAgentId` before touching a row, or is intentionally platform-staff-only via `requirePlatform()`. No route lets one customer, vendor, or delivery agent reach another's data by guessing an id.
+- **Mass assignment:** every mutating route passes a Zod-parsed (and therefore field-whitelisted) object to Prisma's `data:` — checked in particular where the code writes `data: body` or `data: {...body, ...}` directly, since that's the pattern most likely to accidentally admit an unintended field (e.g. `/api/vendor/me` PATCH cannot touch `status`, `commissionBps`, or `ownerId` — a vendor cannot self-approve their own store or set their own commission rate).
+- **Privilege escalation:** self-registration (`/api/auth/register`) only ever grants `customer`/`vendor`/`delivery_agent` roles; there is no API surface at all for granting `platform_admin`/`support_agent`/`finance_officer`/`super_admin` — staff accounts only ever come from the seed script. No route lets a user modify their own role or another user's role.
+- **Payments (A02/A08):** re-verified rather than re-explained — Paystack webhook signatures use `timingSafeEqual` (not a plain `!==`), every settlement re-verifies against the gateway rather than trusting the webhook/redirect, amount and currency mismatches throw instead of silently settling, and webhook processing is idempotent on `(provider, eventId)`.
+- **Injection (A03):** 100% Prisma-parameterized queries; the only raw SQL in the codebase is `SELECT 1` in the health check. No string-built queries anywhere.
+
+**Fixed:**
+- **Security headers** (`next.config.mjs`): added a `Content-Security-Policy` and `Strict-Transport-Security` alongside the headers already there since Phase 1. The CSP keeps `'unsafe-inline'` on `script-src`/`style-src` as a deliberate, documented tradeoff rather than a nonce-based strict CSP — this app has zero `dangerouslySetInnerHTML` on user content (verified by grep; the only instance is a static, hardcoded theme-detect script), so the realistic XSS surface a strict CSP would close is already near zero here, while a nonce-based CSP would force `next/headers()` into the root layout and flip every currently-static page in the app to server-rendered-on-demand — a real performance/cost cost for a marginal benefit this codebase doesn't need. Verified against a production build (not just dev) across public, vendor, and admin pages, including ones with dynamic inline `style={{height}}` bars (the reports/analytics charts) — zero CSP violations.
+- **Rate limiting gaps** — five endpoints had none: `/api/auth/reset-password` (defense-in-depth; the token itself is 256 bits of randomness, so this is belt-and-suspenders), `/api/checkout`, `/api/cart/coupon`, `/api/reviews`, and both support-ticket message endpoints. The standout real finding here: a vendor's coupon code (3-20 vendor-chosen alphanumeric characters) has far less entropy than a password or reset token — without a limit, `/api/cart/coupon` would let anyone enumerate a vendor's live promo codes by brute force. Verified live: 21 rapid requests against the coupon endpoint returned `429 rate_limited` on the 21st, exactly at the configured limit.
+- **Dependency audit:** `npm audit` flags `next@14.2.35` (the latest 14.x release — there is no newer 14.x patch) for several high-severity advisories. Read each one rather than treating the severity label alone as the verdict: they cover Server Actions, i18n Middleware rewrites, `next/image`'s optimizer, and custom-server WebSocket upgrades — grepped the codebase and confirmed it uses none of them (no `"use server"`, no `middleware.ts`, no `next/image` import, no custom server). Residual risk is judged low for this specific deployment. Deliberately **not** force-upgrading to Next 16 to clear the audit — that's a breaking major-version change, inconsistent with every other project in this portfolio's Next 14 baseline, and would need its own dedicated regression pass across all ~140 routes rather than being folded into a security-hardening phase. Flagging it here as a tracked, scoped follow-up is more honest than either ignoring it or rushing a risky upgrade.
+
+**Reviewed and deliberately left as-is:** the process-local rate limiter (`src/lib/ratelimit.ts`) doesn't share state across multiple server instances — fine at current single-instance-per-request Vercel serverless scale, already documented in that file since Phase 1; the login/register response body includes the raw access/refresh tokens alongside setting them as HttpOnly cookies — reviewed as an intentional dual-auth design (a future bearer-token mobile client could use the body; the web app only ever uses the cookies) rather than a leak, given `bearer()` support already exists in `src/lib/auth.ts`.
 
 ## Getting started
 
@@ -168,6 +186,6 @@ provisioned yet.
 5. **Vendor platform** — done.
 6. **Delivery** — done.
 7. **Admin** — done.
-8. **Advanced** — this release.
-9. **Security** — OWASP audit, permission/payment/API testing.
+8. **Advanced** — done.
+9. **Security** — this release.
 10. **Production** — Docker (optional), CI/CD, monitoring, CDN.

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { handler, ok, parseBody } from "@/lib/api";
 import { requireAuth } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { rateLimit } from "@/lib/ratelimit";
 
 /** Any authenticated user can open a ticket — customer, vendor, or delivery
  *  agent — so this deliberately isn't gated behind a specific permission,
@@ -27,6 +28,7 @@ const schema = z.object({
 
 export const POST = handler(async (req: Request) => {
   const s = await requireAuth(req);
+  rateLimit(`support-ticket:${s.userId}`, 10, 3600);
   const body = await parseBody(req, schema);
 
   const ticket = await prisma.supportTicket.create({

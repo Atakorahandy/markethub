@@ -11,6 +11,31 @@ const nextConfig = {
     ],
   },
   async headers() {
+    // No user content is ever rendered as raw HTML (grep confirms the only
+    // dangerouslySetInnerHTML in the app is the static, hardcoded theme-detect
+    // script in layout.tsx — everything else goes through JSX's auto-escaping),
+    // so a strict CSP earns its keep here without needing per-request nonces.
+    // 'unsafe-inline' stays on script-src/style-src as a deliberate tradeoff:
+    // Next.js's own hydration/RSC-streaming inline scripts and this app's
+    // dynamic inline `style={{ height }}` bars (reports/analytics charts) both
+    // require it, and a nonce-based CSP would force every page in the app to
+    // render dynamically instead of statically (next/headers() in the root
+    // layout opts the whole tree out of static generation) — a real cost for
+    // a benefit this codebase's XSS surface doesn't currently need.
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https:", // vendors paste arbitrary hosted image URLs — no fixed allowlist to enforce
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "upgrade-insecure-requests",
+    ].join("; ");
+
     return [
       {
         source: "/:path*",
@@ -19,6 +44,8 @@ const nextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+          { key: "Content-Security-Policy", value: csp },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
         ],
       },
     ];

@@ -10,6 +10,7 @@ import { initiatePaymentForOrder } from "@/lib/payments/process";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { activeFlashSalesByProduct, effectiveUnitPrice } from "@/lib/pricing";
 import { findCartCoupon, checkCouponUsage, computeDiscount } from "@/lib/coupons";
+import { rateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({
   addressId: z.string().cuid(),
@@ -22,6 +23,9 @@ const schema = z.object({
 export const POST = handler(async (req: Request) => {
   const s = await requireAuth(req);
   if (!can(s, "orders.create")) throw Errors.forbidden();
+  // Bounds both plain checkout-spam and coupon-code guessing through this
+  // second path into the same validation logic as the cart preview endpoint.
+  rateLimit(`checkout:${s.userId}`, 20, 300);
   const body = await parseBody(req, schema);
 
   // Idempotency: a retried submit (double-click, network retry) returns the

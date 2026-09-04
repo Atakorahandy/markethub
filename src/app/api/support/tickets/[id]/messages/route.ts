@@ -6,11 +6,13 @@ import { handler, ok, parseBody, Errors } from "@/lib/api";
 import { requireAuth } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 import { audit } from "@/lib/audit";
+import { rateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({ body: z.string().trim().min(1).max(4000) });
 
 export const POST = handler(async (req: Request, { params }: { params: { id: string } }) => {
   const s = await requireAuth(req);
+  rateLimit(`support-message:${s.userId}`, 30, 300);
   const id = idSchema.parse(params.id);
   const body = await parseBody(req, schema);
 

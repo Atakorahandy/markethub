@@ -6,6 +6,7 @@ import { handler, ok, parseBody, Errors } from "@/lib/api";
 import { requireAuth, can } from "@/lib/auth";
 import { recomputeProductRating, recomputeVendorRating } from "@/lib/reviews";
 import { audit } from "@/lib/audit";
+import { rateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({
   orderItemId: z.string().cuid(),
@@ -17,6 +18,7 @@ const schema = z.object({
 export const POST = handler(async (req: Request) => {
   const s = await requireAuth(req);
   if (!can(s, "reviews.create")) throw Errors.forbidden();
+  rateLimit(`review:${s.userId}`, 20, 3600);
   const body = await parseBody(req, schema);
 
   const orderItem = await prisma.orderItem.findUnique({
