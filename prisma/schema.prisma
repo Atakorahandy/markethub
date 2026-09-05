@@ -89,6 +89,17 @@ model User {
   failedLogins    Int       @default(0)
   lockedUntil     DateTime?
   lastLoginAt     DateTime?
+  // Two-factor auth (TOTP, RFC 6238) — staff accounts only (super_admin,
+  // platform_admin, support_agent, finance_officer), enforced at the API
+  // layer, not by a schema constraint. mfaPendingSecret holds a
+  // freshly-generated secret during enrollment, before the user has proven
+  // they can produce a valid code; it's promoted to mfaSecret (and cleared)
+  // only on confirmation, so an enrollment nobody finishes never silently
+  // becomes "protected but nobody has the secret."
+  mfaPendingSecret String?
+  mfaSecret        String?
+  mfaEnabledAt     DateTime?
+  mfaBackupCodes   String    @default("[]") // JSON string[] of sha256-hashed single-use codes
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

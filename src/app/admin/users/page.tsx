@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { Spinner, useToast, EmptyState } from "@/components/ui";
 
-type UserRow = { id: string; name: string; email: string; phone: string | null; kind: string; isActive: boolean; createdAt: string };
+type UserRow = { id: string; name: string; email: string; phone: string | null; kind: string; isActive: boolean; createdAt: string; mfaEnabledAt: string | null };
 
 export default function AdminUsersPage() {
   const [items, setItems] = useState<UserRow[] | null>(null);
@@ -22,6 +22,17 @@ export default function AdminUsersPage() {
     try {
       await api(`/admin/users/${u.id}`, { method: "PATCH", body: { isActive: !u.isActive } });
       toast(u.isActive ? "User suspended" : "User activated");
+      load();
+    } catch (e: any) {
+      toast(e.message, "err");
+    }
+  }
+
+  async function resetMfa(u: UserRow) {
+    if (!window.confirm(`Turn off two-factor authentication for ${u.name}? Only do this after verifying their identity out of band.`)) return;
+    try {
+      await api(`/admin/users/${u.id}`, { method: "PATCH", body: { disableMfa: true } });
+      toast("Two-factor authentication reset");
       load();
     } catch (e: any) {
       toast(e.message, "err");
@@ -52,6 +63,9 @@ export default function AdminUsersPage() {
                   <td className="td capitalize">{u.kind.replace("_", " ")}</td>
                   <td className="td"><span className={`badge ${u.isActive ? "bg-emerald-100 text-emerald-800" : "bg-zinc-200 text-zinc-700"}`}>{u.isActive ? "active" : "suspended"}</span></td>
                   <td className="td text-right">
+                    {u.mfaEnabledAt && (
+                      <button onClick={() => resetMfa(u)} className="btn-ghost btn-sm mr-2">Reset 2FA</button>
+                    )}
                     <button onClick={() => toggle(u)} className={u.isActive ? "btn-danger btn-sm" : "btn-primary btn-sm"}>
                       {u.isActive ? "Suspend" : "Activate"}
                     </button>

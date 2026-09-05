@@ -35,6 +35,10 @@ function AccountBody() {
         <Link href="/account/addresses" className="card p-4 text-center font-medium hover:border-brand-500">Addresses</Link>
       </div>
 
+      {(me.isSuperAdmin || me.isPlatformStaff) && (
+        <Link href="/account/security" className="card block p-4 font-medium hover:border-brand-500">Security — two-factor authentication</Link>
+      )}
+
       {me.vendorIds.length > 0 && (
         <a href="/vendor" className="card block p-5 hover:border-brand-500">
           <p className="font-semibold">Go to your vendor dashboard →</p>

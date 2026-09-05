@@ -57,10 +57,10 @@ export const POST = handler(async (req: Request) => {
   const body = await parseBody(req, schema);
 
   const category = await prisma.category.findUnique({ where: { id: body.categoryId } });
-  if (!category) throw Errors.validation({ categoryId: "Select a valid category." });
+  if (!category) throw Errors.validation({ categoryId: "invalid" }, "Select a valid category.");
 
   if (body.discountPrice != null && body.discountPrice >= body.price) {
-    throw Errors.validation({ discountPrice: "Discount price must be lower than the regular price." });
+    throw Errors.validation({ discountPrice: "too_high" }, "Discount price must be lower than the regular price.");
   }
 
   const slug = await uniqueSlug(body.name, (slug) => prisma.product.findUnique({ where: { slug } }).then(Boolean));

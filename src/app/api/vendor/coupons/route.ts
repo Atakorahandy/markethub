@@ -39,10 +39,10 @@ export const POST = handler(async (req: Request) => {
   const body = await parseBody(req, schema);
 
   if (body.type === "percent" && (body.value < 1 || body.value > 100)) {
-    throw Errors.validation({ value: "A percentage discount must be between 1 and 100." });
+    throw Errors.validation({ value: "out_of_range" }, "A percentage discount must be between 1 and 100.");
   }
   if (body.endsAt && body.startsAt && body.endsAt <= body.startsAt) {
-    throw Errors.validation({ endsAt: "End date must be after the start date." });
+    throw Errors.validation({ endsAt: "before_start" }, "End date must be after the start date.");
   }
 
   const coupon = await prisma.coupon.create({

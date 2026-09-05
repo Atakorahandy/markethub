@@ -37,10 +37,10 @@ export const POST = handler(async (req: Request) => {
   }
 
   const address = await prisma.address.findUnique({ where: { id: body.addressId } });
-  if (!address || address.userId !== s.userId) throw Errors.validation({ addressId: "Select a valid delivery address." });
+  if (!address || address.userId !== s.userId) throw Errors.validation({ addressId: "invalid" }, "Select a valid delivery address.");
 
   const cartItems = await prisma.cartItem.findMany({ where: { userId: s.userId } });
-  if (cartItems.length === 0) throw Errors.validation({ cart: "Your cart is empty." });
+  if (cartItems.length === 0) throw Errors.validation({ cart: "empty" }, "Your cart is empty.");
 
   const order = await prisma.$transaction(async (tx) => {
     type Line = { vendorId: string; vendorName: string; deliveryFee: number; productId: string; variantId: string | null; name: string; image: string; unitPrice: number; quantity: number };

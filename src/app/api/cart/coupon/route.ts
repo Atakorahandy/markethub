@@ -24,7 +24,7 @@ export const POST = handler(async (req: Request) => {
   const body = await parseBody(req, schema);
 
   const cart = await loadCartSummary(s.userId);
-  if (cart.vendorGroups.length === 0) throw Errors.validation({ cart: "Your cart is empty." });
+  if (cart.vendorGroups.length === 0) throw Errors.validation({ cart: "empty" }, "Your cart is empty.");
 
   const vendorIds = cart.vendorGroups.map((g) => g.vendorId);
   const coupon = await findCartCoupon(prisma, body.code, vendorIds);

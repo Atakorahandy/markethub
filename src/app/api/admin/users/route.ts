@@ -16,7 +16,7 @@ export const GET = handler(async (req: Request) => {
   const [items, total] = await Promise.all([
     prisma.user.findMany({
       where,
-      select: { id: true, name: true, email: true, phone: true, kind: true, isActive: true, lastLoginAt: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, kind: true, isActive: true, lastLoginAt: true, createdAt: true, mfaEnabledAt: true },
       orderBy: { createdAt: "desc" },
       ...paginate(page, pageSize),
     }),

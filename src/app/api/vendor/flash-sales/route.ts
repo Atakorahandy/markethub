@@ -40,11 +40,11 @@ export const POST = handler(async (req: Request) => {
   const body = await parseBody(req, schema);
 
   const product = await prisma.product.findUnique({ where: { id: body.productId } });
-  if (!product || product.vendorId !== vendorId) throw Errors.validation({ productId: "Select one of your own products." });
+  if (!product || product.vendorId !== vendorId) throw Errors.validation({ productId: "invalid" }, "Select one of your own products.");
 
   const salePrice = Math.round(body.salePrice * 100);
   const normalPrice = product.discountPrice ?? product.price;
-  if (salePrice >= normalPrice) throw Errors.validation({ salePrice: "The flash sale price must be lower than the current price." });
+  if (salePrice >= normalPrice) throw Errors.validation({ salePrice: "too_high" }, "The flash sale price must be lower than the current price.");
 
   const sale = await prisma.flashSale.create({
     data: { vendorId, productId: product.id, salePrice, startsAt: body.startsAt, endsAt: body.endsAt },

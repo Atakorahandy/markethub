@@ -57,7 +57,7 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
   const discountPrice = body.discountPrice !== undefined ? (body.discountPrice != null ? Math.round(body.discountPrice * 100) : null) : undefined;
   const effectivePrice = price ?? product.price;
   if (discountPrice != null && discountPrice >= effectivePrice) {
-    throw Errors.validation({ discountPrice: "Discount price must be lower than the regular price." });
+    throw Errors.validation({ discountPrice: "too_high" }, "Discount price must be lower than the regular price.");
   }
 
   const updated = await prisma.$transaction(async (tx) => {

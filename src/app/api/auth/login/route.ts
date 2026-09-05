@@ -6,6 +6,7 @@ import { handler, ok, parseBody, Errors, ApiError } from "@/lib/api";
 import { verifyPassword } from "@/lib/crypto";
 import { emailSchema } from "@/lib/validation";
 import { issueSession, setSessionCookies } from "@/lib/auth";
+import { signMfaChallenge } from "@/lib/jwt";
 import { audit } from "@/lib/audit";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import { env } from "@/lib/env";
@@ -48,6 +49,13 @@ export const POST = handler(async (req: Request) => {
     where: { id: user.id },
     data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() },
   });
+
+  // Password is correct, but a session isn't issued yet — the client must
+  // still prove possession of the second factor via /api/auth/mfa/verify.
+  if (user.mfaEnabledAt) {
+    const challengeToken = await signMfaChallenge(user.id);
+    return ok({ mfaRequired: true, challengeToken });
+  }
 
   const tokens = await issueSession(user, { userAgent: req.headers.get("user-agent") ?? "", ip });
   await audit({ req, actorId: user.id, actorName: user.name, action: "auth.login", entityType: "user", entityId: user.id });

@@ -20,7 +20,7 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
   const id = idSchema.parse(params.id);
   const body = await parseBody(req, schema);
 
-  if (body.parentId === id) throw Errors.validation({ parentId: "A category cannot be its own parent." });
+  if (body.parentId === id) throw Errors.validation({ parentId: "self_reference" }, "A category cannot be its own parent.");
 
   const category = await prisma.category.update({ where: { id }, data: body });
   await audit({ req, actorId: s.userId, actorName: s.name, action: "category.updated", entityType: "category", entityId: id });

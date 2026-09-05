@@ -24,7 +24,7 @@ export const POST = handler(async (req: Request) => {
 
   const reset = await prisma.passwordReset.findUnique({ where: { tokenHash } });
   if (!reset || reset.usedAt || reset.expiresAt < new Date()) {
-    throw Errors.validation({ token: "This reset link is invalid or has expired." });
+    throw Errors.validation({ token: "invalid_or_expired" }, "This reset link is invalid or has expired.");
   }
 
   await prisma.$transaction([

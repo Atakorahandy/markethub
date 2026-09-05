@@ -33,7 +33,7 @@ export const POST = handler(async (req: Request) => {
   let stock = product.stock;
   if (body.variantId) {
     const variant = await prisma.productVariant.findUnique({ where: { id: body.variantId } });
-    if (!variant || variant.productId !== product.id) throw Errors.validation({ variantId: "Invalid product option." });
+    if (!variant || variant.productId !== product.id) throw Errors.validation({ variantId: "invalid" }, "Invalid product option.");
     stock = variant.stock;
   }
   if (stock <= 0) throw Errors.conflict("This item is out of stock.");
