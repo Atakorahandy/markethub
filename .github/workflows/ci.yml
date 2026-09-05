@@ -1,0 +1,38 @@
+name: CI
+
+# Vercel's own GitHub integration builds and deploys every push to main
+# independently of this workflow — this is a quality gate, not the deploy
+# mechanism. It exists so a broken PR is caught before merge instead of
+# being discovered only after Vercel has already deployed it to production.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Schema-only checks — no live database needed, so this job never has
+      # to provision a throwaway Postgres service.
+      - run: npx prisma generate
+      - run: npx prisma validate
+
+      - run: npm run typecheck
+      - run: npm run lint
+
+      # build:noprisma (not the default `build` script) deliberately skips
+      # `prisma migrate deploy`, which needs a real DATABASE_URL — the same
+      # reason this script exists for Vercel preview deployments without a
+      # database attached yet (see README's "Deploying" section).
+      - run: npm run build:noprisma

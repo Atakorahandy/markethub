@@ -4,7 +4,7 @@ An original multi-vendor e-commerce marketplace for Ghana — independent stores
 storefront, one checkout. Inspired by common marketplace functionality (à la Jumia);
 no copied branding, UI, or code.
 
-**This repo is Phase 9 of a 10-phase build.** See [Roadmap](#roadmap) below.
+**This repo is Phase 10 of a 10-phase build — complete.** See [Roadmap](#roadmap) below.
 
 ## Phase 1 — Foundation
 
@@ -83,7 +83,7 @@ no copied branding, UI, or code.
 
 **Deliberately not built yet at this point:** disputes (separate from support tickets), partial refunds, a real payment-gateway refund call, image upload, a real SMS/email channel for the delivery OTP, a platform-wide coupon, real-time chat.
 
-## Phase 9 — Security (this release)
+## Phase 9 — Security
 
 An audit pass against the OWASP Top 10, not a new feature set — most of the value here is verifying what the first eight phases already built, and fixing the handful of real gaps that turned up.
 
@@ -100,6 +100,16 @@ An audit pass against the OWASP Top 10, not a new feature set — most of the va
 - **Dependency audit:** `npm audit` flags `next@14.2.35` (the latest 14.x release — there is no newer 14.x patch) for several high-severity advisories. Read each one rather than treating the severity label alone as the verdict: they cover Server Actions, i18n Middleware rewrites, `next/image`'s optimizer, and custom-server WebSocket upgrades — grepped the codebase and confirmed it uses none of them (no `"use server"`, no `middleware.ts`, no `next/image` import, no custom server). Residual risk is judged low for this specific deployment. Deliberately **not** force-upgrading to Next 16 to clear the audit — that's a breaking major-version change, inconsistent with every other project in this portfolio's Next 14 baseline, and would need its own dedicated regression pass across all ~140 routes rather than being folded into a security-hardening phase. Flagging it here as a tracked, scoped follow-up is more honest than either ignoring it or rushing a risky upgrade.
 
 **Reviewed and deliberately left as-is:** the process-local rate limiter (`src/lib/ratelimit.ts`) doesn't share state across multiple server instances — fine at current single-instance-per-request Vercel serverless scale, already documented in that file since Phase 1; the login/register response body includes the raw access/refresh tokens alongside setting them as HttpOnly cookies — reviewed as an intentional dual-auth design (a future bearer-token mobile client could use the body; the web app only ever uses the cookies) rather than a leak, given `bearer()` support already exists in `src/lib/auth.ts`.
+
+## Phase 10 — Production (this release)
+
+Vercel has been the deployment target since Phase 1, so this phase is about the pieces that weren't already in place around it, not a platform migration.
+
+- **CDN:** already covered — Vercel's edge network serves every static asset and route in this app without any configuration here. Nothing to build; noted so the roadmap item isn't mistaken for a gap.
+- **CI/CD:** `.github/workflows/ci.yml` — a quality *gate*, not the deploy mechanism (Vercel's own GitHub integration already builds and deploys every push to `main` independently). Runs on every push and PR: `prisma generate` + `prisma validate` (schema-only, no live database needed), typecheck, lint, and `build:noprisma` (the same DB-less build script the README's "Deploying" section already documents for previews without a database attached). Catches a broken PR before merge instead of after Vercel has already deployed it.
+- **Lint, for the first time:** `next lint` had been in `package.json` since Phase 1 but ESLint itself was never installed, so it silently did nothing — `eslint.ignoreDuringBuilds: true` in `next.config.mjs` meant a broken lint config couldn't even fail a build either way. Installed `eslint` + `eslint-config-next` and ran it for real against all ~150 files across 9 phases: **one** warning turned up (an unescaped apostrophe in `product-form.tsx`), now fixed. That result says more about the discipline of the first nine phases than about this one.
+- **Monitoring:** added `@vercel/analytics` and `@vercel/speed-insights` to the root layout — Vercel's own first-party Web Analytics and Core Web Vitals tracking, chosen over a third-party APM because it needs no new account or API key beyond the Vercel project this app already deploys to. **Manual step still needed:** the components ship inert until Web Analytics and Speed Insights are toggled on for this project in the Vercel dashboard (Project → Analytics / Speed Insights tabs) — that toggle isn't reachable through the deployment API used to build and verify this project, so it's flagged here rather than silently assumed done.
+- **Docker (optional, per the roadmap):** added `docker-compose.yml` for a local Postgres container, matching the exact convention already used by three sibling portfolio projects (foodhub, laundrypro, traffic-command) — an alternative to this repo's native-Postgres local dev setup for a machine that has Docker. **Deliberately not included:** a Dockerfile to containerize the Next.js app itself. No sibling project in the portfolio has one either (all of them deploy to Vercel, matching this one), and this development machine has no Docker installed to actually build and test one — shipping an unverified Dockerfile would be worse than not shipping one at all.
 
 ## Getting started
 
@@ -187,5 +197,5 @@ provisioned yet.
 6. **Delivery** — done.
 7. **Admin** — done.
 8. **Advanced** — done.
-9. **Security** — this release.
-10. **Production** — Docker (optional), CI/CD, monitoring, CDN.
+9. **Security** — done.
+10. **Production** — this release. All 10 phases complete.

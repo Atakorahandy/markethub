@@ -153,7 +153,7 @@ export function ProductForm({
           {statusOptions.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
         </select>
         {statusOptions.includes("pending_review") && (
-          <p className="muted mt-1 text-xs">A product only appears in the marketplace once our team approves it — submit for review when it's ready.</p>
+          <p className="muted mt-1 text-xs">A product only appears in the marketplace once our team approves it — submit for review when it&apos;s ready.</p>
         )}
       </div>
     </div>

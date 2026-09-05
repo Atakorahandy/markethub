@@ -2,7 +2,7 @@
   "name": "markethub",
   "version": "0.1.0",
   "private": true,
-  "description": "MarketHub — original multi-vendor e-commerce marketplace (Next.js + Prisma). Ghana-focused: GHS, Mobile Money, regional delivery. Phase 1: foundation (auth, roles, user management, basic UI).",
+  "description": "MarketHub — original multi-vendor e-commerce marketplace (Next.js + Prisma). Ghana-focused: GHS, Mobile Money, regional delivery. All 10 build phases complete — see README.md.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "prisma generate && prisma migrate deploy && next build",
@@ -30,6 +30,8 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "bcryptjs": "^2.4.3",
     "jose": "^5.9.6",
     "nanoid": "^5.0.9",
@@ -44,6 +46,8 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "postcss": "^8.4.47",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.14",
