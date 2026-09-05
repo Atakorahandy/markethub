@@ -149,6 +149,35 @@ export async function issueSession(
   return { accessToken, refreshToken, expiresIn: env.accessTtl };
 }
 
+/** Rotates a refresh token: the presented one is revoked and a brand-new
+ *  jti issued in the same transaction, so a refresh token is single-use.
+ *  Called only after the caller has confirmed the presented token is
+ *  currently valid (not already revoked, not expired) — reuse of an
+ *  already-rotated token is handled by the caller as a theft signal, not
+ *  here. */
+export async function rotateRefreshToken(
+  oldTokenRowId: string,
+  user: { id: string; email: string; kind: string },
+  ctx: { userAgent?: string; ip?: string } = {},
+): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+  const jti = crypto.randomUUID();
+  const accessToken = await signAccess({ sub: user.id, email: user.email, kind: user.kind });
+  const refreshToken = await signRefresh({ sub: user.id, jti });
+  await prisma.$transaction([
+    prisma.refreshToken.update({ where: { id: oldTokenRowId }, data: { revokedAt: new Date() } }),
+    prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        jti,
+        userAgent: ctx.userAgent ?? "",
+        ip: ctx.ip ?? "",
+        expiresAt: new Date(Date.now() + env.refreshTtl * 1000),
+      },
+    }),
+  ]);
+  return { accessToken, refreshToken, expiresIn: env.accessTtl };
+}
+
 export function setSessionCookies(res: Response, tokens: { accessToken: string; refreshToken: string }): void {
   const secure = env.isProd ? "; Secure" : "";
   res.headers.append(

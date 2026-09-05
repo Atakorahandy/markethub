@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
+import { env } from "./env";
 
 /** Consistent API envelope. */
 export type ApiOk<T> = { ok: true; data: T; meta?: Record<string, unknown> };
@@ -66,10 +67,45 @@ export function fail(err: unknown) {
   );
 }
 
-/** Wrap a route handler so thrown ApiError/ZodError become clean responses. */
+/** Global, always-on baseline throttle applied to every route through
+ *  `handler()` below — keyed by IP, using the RATE_LIMIT_WINDOW_SECONDS/
+ *  RATE_LIMIT_MAX config that has existed in env.ts since Phase 1 but was
+ *  never actually wired up anywhere. This is deliberately a small, separate
+ *  sliding-window bucket rather than importing `rateLimit()` from
+ *  src/lib/ratelimit.ts — that module imports `Errors` from this one, and a
+ *  handler() this central is not the place to introduce a circular import
+ *  for the sake of a five-line function. Endpoint-specific limits (login,
+ *  coupon guessing, etc.) still call ratelimit.ts's `rateLimit()` directly
+ *  and layer a stricter budget on top of this floor. */
+const globalBuckets = new Map<string, { count: number; resetAt: number }>();
+if (typeof setInterval !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of globalBuckets) if (v.resetAt < now) globalBuckets.delete(k);
+  }, 60_000).unref?.();
+}
+
+function globalThrottle(req: unknown): void {
+  if (!(req instanceof Request)) return;
+  const xf = req.headers.get("x-forwarded-for");
+  const ip = xf ? xf.split(",")[0]!.trim() : req.headers.get("x-real-ip") ?? "0.0.0.0";
+  const now = Date.now();
+  const windowMs = env.rateWindowSeconds * 1000;
+  const b = globalBuckets.get(ip);
+  if (!b || b.resetAt < now) {
+    globalBuckets.set(ip, { count: 1, resetAt: now + windowMs });
+    return;
+  }
+  b.count += 1;
+  if (b.count > env.rateMax) throw Errors.rateLimited();
+}
+
+/** Wrap a route handler so thrown ApiError/ZodError become clean responses,
+ *  and every request passes through the global baseline throttle above. */
 export function handler<T extends (...args: any[]) => Promise<Response>>(fn: T): T {
   return (async (...args: any[]) => {
     try {
+      globalThrottle(args[0]);
       return await fn(...args);
     } catch (err) {
       return fail(err);

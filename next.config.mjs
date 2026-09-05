@@ -42,8 +42,16 @@ const nextConfig = {
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-DNS-Prefetch-Control", value: "off" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+          // Isolates the browsing context (blocks window.opener-based
+          // reverse-tabnabbing and cross-window timing leaks). Safe here: the
+          // one place this app leaves the origin mid-flow is the Paystack
+          // checkout redirect, done via `window.location.href` (a top-level
+          // navigation), never `window.open()`/postMessage, so COOP has
+          // nothing legitimate to break.
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Content-Security-Policy", value: csp },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
         ],
