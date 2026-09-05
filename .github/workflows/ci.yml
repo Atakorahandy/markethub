@@ -13,6 +13,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Placeholder values only — nothing in this job ever opens a real
+    # database connection or verifies a real token. `prisma validate` reads
+    # env("DATABASE_URL") to type-check the datasource block but never
+    # connects, and build:noprisma skips `prisma migrate deploy` entirely;
+    # PrismaClient itself is lazy and doesn't connect until a query runs,
+    # which never happens during a build. env.ts (src/lib/env.ts) still
+    # requires these three to be *present* once NODE_ENV=production (which
+    # `next build` always sets, regardless of the job's own env) — real
+    # secrets live only in Vercel's project env vars, never here.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      JWT_ACCESS_SECRET: ci-only-placeholder-not-a-real-secret-0
+      JWT_REFRESH_SECRET: ci-only-placeholder-not-a-real-secret-1
     steps:
       - uses: actions/checkout@v4
 
