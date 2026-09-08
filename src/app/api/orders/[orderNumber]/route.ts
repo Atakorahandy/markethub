@@ -4,11 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { handler, ok, Errors } from "@/lib/api";
 import { requireAuth } from "@/lib/auth";
 
-export const GET = handler(async (req: Request, { params }: { params: { orderNumber: string } }) => {
+export const GET = handler(async (req: Request, { params }: { params: Promise<{ orderNumber: string }> }) => {
   const s = await requireAuth(req);
 
   const order = await prisma.order.findUnique({
-    where: { orderNumber: params.orderNumber },
+    where: { orderNumber: (await params).orderNumber },
     include: {
       vendorOrders: {
         include: {

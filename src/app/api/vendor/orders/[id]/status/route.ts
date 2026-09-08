@@ -14,10 +14,10 @@ const schema = z.object({
   note: z.string().trim().max(300).optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requireAuth(req);
   if (!can(s, "orders.manage_own") || s.vendorIds.length === 0) throw Errors.forbidden("A vendor account is required.");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const vendorOrder = await prisma.vendorOrder.findUnique({ where: { id }, include: { vendor: true } });

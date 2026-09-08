@@ -7,7 +7,7 @@ import { verifyRefresh } from "@/lib/jwt";
 import { REFRESH_COOKIE, clearSessionCookies } from "@/lib/auth";
 
 export const POST = handler(async () => {
-  const rt = cookies().get(REFRESH_COOKIE)?.value;
+  const rt = (await cookies()).get(REFRESH_COOKIE)?.value;
   if (rt) {
     try {
       const claims = await verifyRefresh(rt);

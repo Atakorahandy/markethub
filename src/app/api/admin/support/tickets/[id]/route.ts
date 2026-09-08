@@ -7,9 +7,9 @@ import { requirePlatform } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 import { audit } from "@/lib/audit";
 
-export const GET = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const GET = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   await requirePlatform(req, "disputes.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id },
@@ -24,9 +24,9 @@ const schema = z.object({
   assignToMe: z.boolean().optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "disputes.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const ticket = await prisma.supportTicket.findUnique({ where: { id } });

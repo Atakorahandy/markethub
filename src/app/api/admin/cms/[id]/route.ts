@@ -7,9 +7,9 @@ import { requirePlatform } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 import { audit } from "@/lib/audit";
 
-export const GET = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const GET = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   await requirePlatform(req, "settings.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const page = await prisma.cmsPage.findUnique({ where: { id } });
   if (!page) throw Errors.notFound();
   return ok(page);
@@ -21,9 +21,9 @@ const schema = z.object({
   published: z.boolean().optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "settings.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const updated = await prisma.cmsPage.update({
@@ -39,9 +39,9 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
   return ok(updated);
 });
 
-export const DELETE = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const DELETE = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "settings.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   await prisma.cmsPage.delete({ where: { id } });
   await audit({ req, actorId: s.userId, actorName: s.name, action: "cms.deleted", entityType: "cmsPage", entityId: id });
   return ok({ ok: true });

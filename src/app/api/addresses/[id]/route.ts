@@ -28,8 +28,8 @@ const schema = z.object({
   isDefault: z.boolean().optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
-  const id = idSchema.parse(params.id);
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const id = idSchema.parse((await params).id);
   const { session } = await loadOwn(req, id);
   const body = await parseBody(req, schema);
 
@@ -41,8 +41,8 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
   return ok(address);
 });
 
-export const DELETE = handler(async (req: Request, { params }: { params: { id: string } }) => {
-  const id = idSchema.parse(params.id);
+export const DELETE = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const id = idSchema.parse((await params).id);
   await loadOwn(req, id);
   const inUse = await prisma.order.count({ where: { addressId: id } });
   if (inUse > 0) throw Errors.conflict("This address is used on a past order and can't be deleted.");

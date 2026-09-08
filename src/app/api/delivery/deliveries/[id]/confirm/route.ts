@@ -12,9 +12,9 @@ import { rateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({ otp: z.string().trim().length(4) });
 
-export const POST = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const POST = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requireDeliveryAgent(req);
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   // A 4-digit code has only 10,000 combinations — bound how fast it can be guessed.
   rateLimit(`delivery-otp:${id}`, 8, 300);
   const body = await parseBody(req, schema);

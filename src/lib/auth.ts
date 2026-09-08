@@ -34,7 +34,7 @@ export async function getSession(req: Request): Promise<Session | null> {
   let token = bearer(req);
   if (!token) {
     try {
-      token = cookies().get(ACCESS_COOKIE)?.value ?? null;
+      token = (await cookies()).get(ACCESS_COOKIE)?.value ?? null;
     } catch {
       token = null;
     }

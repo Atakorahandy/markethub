@@ -5,10 +5,10 @@ import { handler, ok, Errors } from "@/lib/api";
 import { requireAuth, can } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 
-export const GET = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const GET = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requireAuth(req);
   if (!can(s, "orders.manage_own") || s.vendorIds.length === 0) throw Errors.forbidden("A vendor account is required.");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
 
   const vendorOrder = await prisma.vendorOrder.findUnique({
     where: { id },

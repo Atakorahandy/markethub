@@ -13,9 +13,9 @@ const schema = z.object({
   isFeatured: z.boolean().optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "products.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const product = await prisma.product.findUnique({ where: { id } });

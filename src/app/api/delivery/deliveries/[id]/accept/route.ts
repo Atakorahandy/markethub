@@ -6,9 +6,9 @@ import { requireDeliveryAgent } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 import { audit } from "@/lib/audit";
 
-export const POST = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const POST = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requireDeliveryAgent(req);
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
 
   const agent = await prisma.deliveryAgent.findUnique({ where: { id: s.deliveryAgentId } });
   if (!agent || agent.verification !== "verified") throw Errors.forbidden("Your account must be verified before you can accept deliveries.");

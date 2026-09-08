@@ -12,18 +12,18 @@ const schema = z.object({
   logoUrl: z.string().url().max(500).nullable().optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "categories.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
   const brand = await prisma.brand.update({ where: { id }, data: body });
   await audit({ req, actorId: s.userId, actorName: s.name, action: "brand.updated", entityType: "brand", entityId: id });
   return ok(brand);
 });
 
-export const DELETE = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const DELETE = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "categories.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const productCount = await prisma.product.count({ where: { brandId: id } });
   if (productCount > 0) throw Errors.conflict("Reassign its products to another brand first.");
   await prisma.brand.delete({ where: { id } });

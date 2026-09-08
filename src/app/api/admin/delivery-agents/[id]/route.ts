@@ -9,9 +9,9 @@ import { audit } from "@/lib/audit";
 
 const schema = z.object({ verification: z.enum(["verified", "rejected"]) });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "deliveries.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const agent = await prisma.deliveryAgent.update({ where: { id }, data: { verification: body.verification } });

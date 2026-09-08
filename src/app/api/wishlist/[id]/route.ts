@@ -5,10 +5,10 @@ import { handler, ok, Errors } from "@/lib/api";
 import { requireAuth, can } from "@/lib/auth";
 import { idSchema } from "@/lib/validation";
 
-export const DELETE = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const DELETE = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requireAuth(req);
   if (!can(s, "cart.manage")) throw Errors.forbidden();
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
 
   const item = await prisma.wishlistItem.findUnique({ where: { id } });
   if (!item || item.userId !== s.userId) throw Errors.notFound();

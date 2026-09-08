@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { handler, ok, Errors } from "@/lib/api";
 import { activeFlashSalesByProduct } from "@/lib/pricing";
 
-export const GET = handler(async (_req: Request, { params }: { params: { slug: string } }) => {
+export const GET = handler(async (_req: Request, { params }: { params: Promise<{ slug: string }> }) => {
   const product = await prisma.product.findUnique({
-    where: { slug: params.slug },
+    where: { slug: (await params).slug },
     include: {
       vendor: { select: { businessName: true, slug: true, city: true, region: true, ratingAvg: true, ratingCount: true, status: true } },
       category: { select: { name: true, slug: true } },

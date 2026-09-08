@@ -9,9 +9,9 @@ import { audit } from "@/lib/audit";
 
 const schema = z.object({ body: z.string().trim().min(1).max(4000) });
 
-export const POST = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const POST = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "disputes.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const ticket = await prisma.supportTicket.findUnique({ where: { id } });

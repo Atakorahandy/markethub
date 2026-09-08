@@ -9,10 +9,10 @@ import { audit } from "@/lib/audit";
 
 const schema = z.object({ active: z.boolean() });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requireAuth(req);
   if (!can(s, "promotions.manage") || s.vendorIds.length === 0) throw Errors.forbidden("A vendor account is required.");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const sale = await prisma.flashSale.findUnique({ where: { id } });

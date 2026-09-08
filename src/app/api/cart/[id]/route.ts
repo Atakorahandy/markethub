@@ -17,16 +17,16 @@ async function loadOwn(req: Request, id: string) {
 
 const schema = z.object({ quantity: z.coerce.number().int().min(1).max(99) });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
-  const id = idSchema.parse(params.id);
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const id = idSchema.parse((await params).id);
   const { session } = await loadOwn(req, id);
   const body = await parseBody(req, schema);
   await prisma.cartItem.update({ where: { id }, data: { quantity: body.quantity } });
   return ok(await loadCartSummary(session.userId));
 });
 
-export const DELETE = handler(async (req: Request, { params }: { params: { id: string } }) => {
-  const id = idSchema.parse(params.id);
+export const DELETE = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const id = idSchema.parse((await params).id);
   const { session } = await loadOwn(req, id);
   await prisma.cartItem.delete({ where: { id } });
   return ok(await loadCartSummary(session.userId));

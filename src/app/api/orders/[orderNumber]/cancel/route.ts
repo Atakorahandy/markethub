@@ -5,11 +5,11 @@ import { handler, ok, Errors } from "@/lib/api";
 import { requireAuth } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 
-export const POST = handler(async (req: Request, { params }: { params: { orderNumber: string } }) => {
+export const POST = handler(async (req: Request, { params }: { params: Promise<{ orderNumber: string }> }) => {
   const s = await requireAuth(req);
 
   const order = await prisma.order.findUnique({
-    where: { orderNumber: params.orderNumber },
+    where: { orderNumber: (await params).orderNumber },
     include: { vendorOrders: { include: { items: true } } },
   });
   if (!order || order.customerId !== s.userId) throw Errors.notFound();

@@ -13,9 +13,9 @@ const schema = z.object({
   reviewNote: z.string().trim().max(300).optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "withdrawals.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const withdrawal = await prisma.withdrawal.findUnique({ where: { id } });

@@ -15,9 +15,9 @@ const schema = z.object({
   disableMfa: z.literal(true).optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "users.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   if (id === s.userId && body.isActive === false) throw Errors.validation({ isActive: "self_suspend" }, "You cannot suspend your own account.");

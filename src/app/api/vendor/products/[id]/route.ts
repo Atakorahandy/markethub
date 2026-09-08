@@ -15,8 +15,8 @@ async function loadOwnProduct(req: Request, id: string) {
   return { session: s, product };
 }
 
-export const GET = handler(async (req: Request, { params }: { params: { id: string } }) => {
-  const id = idSchema.parse(params.id);
+export const GET = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const id = idSchema.parse((await params).id);
   const { product } = await loadOwnProduct(req, id);
   return ok(product);
 });
@@ -44,8 +44,8 @@ const schema = z.object({
 // edit form can submit unchanged when it's showing an admin-set status.
 const VENDOR_SETTABLE_STATUS = new Set(["draft", "pending_review", "out_of_stock"]);
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
-  const id = idSchema.parse(params.id);
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const id = idSchema.parse((await params).id);
   const { session, product } = await loadOwnProduct(req, id);
   const body = await parseBody(req, schema);
 
@@ -94,8 +94,8 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
   return ok(updated);
 });
 
-export const DELETE = handler(async (req: Request, { params }: { params: { id: string } }) => {
-  const id = idSchema.parse(params.id);
+export const DELETE = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const id = idSchema.parse((await params).id);
   const { session } = await loadOwnProduct(req, id);
   await prisma.product.delete({ where: { id } });
   await audit({ req, actorId: session.userId, actorName: session.name, action: "product.deleted", entityType: "product", entityId: id });

@@ -17,9 +17,9 @@ const NOT_REFUNDABLE = new Set(["pending_payment", "cancelled", "refunded"]);
 // ledger entries `creditVendorForDelivery` created are reversed so the
 // vendor's balance ends up exactly where it would be had the sale never
 // happened — never a bare balance edit.
-export const POST = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const POST = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "orders.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const vendorOrder = await prisma.vendorOrder.findUnique({ where: { id } });

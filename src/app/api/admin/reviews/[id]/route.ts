@@ -10,9 +10,9 @@ import { audit } from "@/lib/audit";
 
 const schema = z.object({ status: z.enum(["published", "hidden"]) });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "reviews.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   const review = await prisma.review.findUnique({ where: { id } });

@@ -19,7 +19,7 @@ import { audit } from "@/lib/audit";
  *  forcing a fresh sign-in is a small cost next to leaving a stolen
  *  session alive. */
 export const POST = handler(async (req: Request) => {
-  const rt = cookies().get(REFRESH_COOKIE)?.value;
+  const rt = (await cookies()).get(REFRESH_COOKIE)?.value;
   if (!rt) throw Errors.unauthorized();
 
   let claims;

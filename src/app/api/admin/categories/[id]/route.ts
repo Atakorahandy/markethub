@@ -15,9 +15,9 @@ const schema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export const PATCH = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "categories.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
   const body = await parseBody(req, schema);
 
   if (body.parentId === id) throw Errors.validation({ parentId: "self_reference" }, "A category cannot be its own parent.");
@@ -27,9 +27,9 @@ export const PATCH = handler(async (req: Request, { params }: { params: { id: st
   return ok(category);
 });
 
-export const DELETE = handler(async (req: Request, { params }: { params: { id: string } }) => {
+export const DELETE = handler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const s = await requirePlatform(req, "categories.manage");
-  const id = idSchema.parse(params.id);
+  const id = idSchema.parse((await params).id);
 
   const [childCount, productCount] = await Promise.all([
     prisma.category.count({ where: { parentId: id } }),
