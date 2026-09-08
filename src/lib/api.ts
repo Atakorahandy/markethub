@@ -100,12 +100,46 @@ function globalThrottle(req: unknown): void {
   if (b.count > env.rateMax) throw Errors.rateLimited();
 }
 
+/** Defense-in-depth CSRF check, on top of the primary defense (session
+ *  cookies are already SameSite=Lax in src/lib/auth.ts, which modern
+ *  browsers refuse to attach to a cross-site POST/PUT/PATCH/DELETE in the
+ *  first place). Only acts on state-changing methods, and only when the
+ *  browser actually sent an Origin header — a missing Origin is normal for
+ *  same-origin top-level navigations in some browsers and for any future
+ *  non-cookie API client (bearer-token mobile app, curl), so it is not
+ *  treated as suspicious on its own. Compares against the request's own
+ *  Host header rather than env.appUrl, since appUrl is known to be capable
+ *  of silently defaulting to localhost if unset in production (see env.ts)
+ *  and a Host-based check can't be broken by that misconfiguration. The
+ *  webhook route intentionally does not go through handler() at all — it
+ *  authenticates via gateway signature verification instead, which is the
+ *  correct model for a server-to-server callback that will never carry a
+ *  matching Origin. */
+function sameOriginCheck(req: unknown): void {
+  if (!(req instanceof Request)) return;
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
+  const origin = req.headers.get("origin");
+  if (!origin) return;
+  const host = req.headers.get("host");
+  if (!host) return;
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    throw Errors.forbidden("Request origin could not be verified.");
+  }
+  if (originHost !== host) throw Errors.forbidden("Cross-origin request blocked.");
+}
+
 /** Wrap a route handler so thrown ApiError/ZodError become clean responses,
- *  and every request passes through the global baseline throttle above. */
+ *  and every request passes through the global baseline throttle and
+ *  same-origin check above. */
 export function handler<T extends (...args: any[]) => Promise<Response>>(fn: T): T {
   return (async (...args: any[]) => {
     try {
       globalThrottle(args[0]);
+      sameOriginCheck(args[0]);
       return await fn(...args);
     } catch (err) {
       return fail(err);

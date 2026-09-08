@@ -10,6 +10,12 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege default: this workflow only reads the repo and runs local
+# checks — it never comments on PRs, creates releases, or pushes anything —
+# so the GITHUB_TOKEN it's handed needs no write scope at all.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -43,6 +49,17 @@ jobs:
 
       - run: npm run typecheck
       - run: npm run lint
+
+      # Dependency vulnerability scan. Gated at `critical` rather than `high`
+      # on purpose: as of this writing there are 5 known high-severity
+      # advisories, all in next@14.2.x with no fix available short of the
+      # major-version upgrade to Next.js 16 (tracked separately — see
+      # README/project notes), and all confirmed not to apply to this app's
+      # actual feature usage (no middleware.ts, no Server Actions, no
+      # rewrites, next/image never used). Gating on `critical` still fails
+      # the build the moment anything more severe turns up, without forcing
+      # every PR to fight an already-tracked, already-assessed issue.
+      - run: npm audit --audit-level=critical
 
       # build:noprisma (not the default `build` script) deliberately skips
       # `prisma migrate deploy`, which needs a real DATABASE_URL — the same
