@@ -10,10 +10,12 @@ import { signMfaChallenge } from "@/lib/jwt";
 import { audit } from "@/lib/audit";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import { env } from "@/lib/env";
+import { verifyCaptcha } from "@/lib/captcha";
 
 const schema = z.object({
   email: emailSchema,
   password: z.string().min(1, "Enter your password."),
+  captchaToken: z.string().nullable().optional(),
 });
 
 export const POST = handler(async (req: Request) => {
@@ -21,6 +23,7 @@ export const POST = handler(async (req: Request) => {
   rateLimit(`login:${ip}`, 20, 300);
   const body = await parseBody(req, schema);
   rateLimit(`login:${body.email}`, env.loginMaxAttempts * 3, 900);
+  if (!(await verifyCaptcha(body.captchaToken, ip))) throw Errors.validation({ captchaToken: "failed" }, "CAPTCHA verification failed. Please try again.");
 
   const user = await prisma.user.findUnique({ where: { email: body.email } });
   const genericFail = Errors.unauthorized("Email or password is incorrect.");

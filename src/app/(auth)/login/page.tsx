@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/client";
+import { Captcha } from "@/components/captcha";
 
 function destinationFor(next: string, roles: string[]): string {
   if (next !== "/") return next;
@@ -53,13 +54,14 @@ function LoginForm() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
     setBusy(true);
     try {
-      const res = await api<any>("/auth/login", { body: { email, password } });
+      const res = await api<any>("/auth/login", { body: { email, password, captchaToken } });
       if (res.mfaRequired) {
         setChallengeToken(res.challengeToken);
         setBusy(false);
@@ -86,6 +88,7 @@ function LoginForm() {
         <label className="label">Password</label>
         <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       </div>
+      <Captcha onToken={setCaptchaToken} />
       {err && <p className="text-sm text-red-600">{err}</p>}
       <button className="btn-primary w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
       <div className="flex justify-between text-sm">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/client";
 import { GHANA_REGIONS, VEHICLE_TYPES } from "@/lib/constants";
+import { Captcha } from "@/components/captcha";
 
 type Role = "customer" | "vendor" | "delivery_agent";
 
@@ -29,6 +30,7 @@ function RegisterForm() {
   const [vehicleType, setVehicleType] = useState<(typeof VEHICLE_TYPES)[number]["key"]>("motorbike");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +39,7 @@ function RegisterForm() {
     try {
       await api("/auth/register", {
         body: {
-          name, email, phone, password, role,
+          name, email, phone, password, role, captchaToken,
           ...(role === "vendor" ? { businessName, city, region } : {}),
           ...(role === "delivery_agent" ? { city, region, vehicleType } : {}),
         },
@@ -123,6 +125,7 @@ function RegisterForm() {
         </p>
       )}
 
+      <Captcha onToken={setCaptchaToken} />
       {err && <p className="text-sm text-red-600">{err}</p>}
       <button className="btn-primary w-full" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
       <p className="text-center text-sm">Already have an account? <Link href="/login" className="link">Sign in</Link></p>

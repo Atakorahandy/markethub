@@ -22,13 +22,22 @@ const nextConfig = {
     // render dynamically instead of statically (next/headers() in the root
     // layout opts the whole tree out of static generation) — a real cost for
     // a benefit this codebase's XSS surface doesn't currently need.
+    // The three challenges.cloudflare.com allowances exist for the optional
+    // Turnstile CAPTCHA (src/lib/captcha.ts, src/components/captcha.tsx) —
+    // inert (widget script never loads) until CAPTCHA_PROVIDER=turnstile +
+    // NEXT_PUBLIC_TURNSTILE_SITE_KEY are actually configured, but CSP can't
+    // be toggled per-request, so the allowance has to exist unconditionally.
+    // A single well-known security vendor's origin is a small, bounded
+    // addition next to what it buys (a CAPTCHA option with zero other
+    // integration cost).
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:", // vendors paste arbitrary hosted image URLs — no fixed allowlist to enforce
       "font-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://challenges.cloudflare.com",
+      "frame-src https://challenges.cloudflare.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",

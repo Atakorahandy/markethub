@@ -9,6 +9,7 @@ import { issueSession, setSessionCookies } from "@/lib/auth";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import { audit } from "@/lib/audit";
 import { slugify } from "@/lib/ids";
+import { verifyCaptcha } from "@/lib/captcha";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Enter your name.").max(120),
@@ -23,12 +24,14 @@ const schema = z.object({
   region: z.string().trim().max(80).optional(),
   // Delivery agent application fields (role=delivery_agent)
   vehicleType: z.enum(["bike", "motorbike", "car", "van", "on_foot"]).optional(),
+  captchaToken: z.string().nullable().optional(),
 });
 
 export const POST = handler(async (req: Request) => {
   const ip = clientIp(req);
   rateLimit(`register:${ip}`, 10, 3600);
   const body = await parseBody(req, schema);
+  if (!(await verifyCaptcha(body.captchaToken, ip))) throw Errors.validation({ captchaToken: "failed" }, "CAPTCHA verification failed. Please try again.");
 
   const existing = await prisma.user.findFirst({ where: { OR: [{ email: body.email }, { phone: body.phone }] } });
   if (existing) throw Errors.conflict("An account with that email or phone already exists.");

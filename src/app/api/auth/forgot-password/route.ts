@@ -2,17 +2,20 @@ export const dynamic = "force-dynamic";
 
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { handler, ok, parseBody } from "@/lib/api";
+import { handler, ok, parseBody, Errors } from "@/lib/api";
 import { emailSchema } from "@/lib/validation";
 import { randomToken, sha256 } from "@/lib/crypto";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import { audit } from "@/lib/audit";
+import { verifyCaptcha } from "@/lib/captcha";
 
-const schema = z.object({ email: emailSchema });
+const schema = z.object({ email: emailSchema, captchaToken: z.string().nullable().optional() });
 
 export const POST = handler(async (req: Request) => {
-  rateLimit(`forgot:${clientIp(req)}`, 10, 3600);
+  const ip = clientIp(req);
+  rateLimit(`forgot:${ip}`, 10, 3600);
   const body = await parseBody(req, schema);
+  if (!(await verifyCaptcha(body.captchaToken, ip))) throw Errors.validation({ captchaToken: "failed" }, "CAPTCHA verification failed. Please try again.");
 
   const user = await prisma.user.findUnique({ where: { email: body.email } });
   // Always respond the same way — never reveal whether the email exists.

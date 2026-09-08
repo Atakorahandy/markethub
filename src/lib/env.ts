@@ -33,4 +33,10 @@ export const env = {
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
   paystackWebhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET || process.env.PAYSTACK_SECRET_KEY || "",
+  // CAPTCHA — provider-agnostic, same "none unless configured" shape as
+  // payments. NONE (default) requires no keys and no code path checks a
+  // token; TURNSTILE additionally needs TURNSTILE_SECRET_KEY server-side
+  // and NEXT_PUBLIC_TURNSTILE_SITE_KEY client-side to render the widget.
+  captchaProvider: (process.env.CAPTCHA_PROVIDER ?? "none").toLowerCase(),
+  turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY ?? "",
 };

@@ -3,19 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client";
+import { Captcha } from "@/components/captcha";
 
 export default function ForgotPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
     setBusy(true);
     try {
-      await api("/auth/forgot-password", { body: { email } });
+      await api("/auth/forgot-password", { body: { email, captchaToken } });
       setSent(true);
     } catch (e: any) {
       setErr(e.message);
@@ -36,6 +38,7 @@ export default function ForgotPage() {
               <label className="label">Email</label>
               <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
+            <Captcha onToken={setCaptchaToken} />
             {err && <p className="text-sm text-red-600">{err}</p>}
             <button className="btn-primary w-full" disabled={busy}>{busy ? "Sending…" : "Send reset link"}</button>
           </>
