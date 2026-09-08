@@ -36,6 +36,7 @@ function ResetForm() {
           <div>
             <label className="label">New password</label>
             <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+            <p className="muted mt-1 text-xs">At least 8 characters, with letters, numbers, and a symbol (e.g. ! @ # $ %).</p>
           </div>
           {err && <p className="text-sm text-red-600">{err}</p>}
           <button className="btn-primary w-full" disabled={busy || !token}>{busy ? "Saving…" : "Save new password"}</button>

@@ -84,6 +84,7 @@ function RegisterForm() {
       <div>
         <label className="label">Password</label>
         <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+        <p className="muted mt-1 text-xs">At least 8 characters, with letters, numbers, and a symbol (e.g. ! @ # $ %).</p>
       </div>
 
       {role === "vendor" && (

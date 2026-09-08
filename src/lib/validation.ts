@@ -15,11 +15,18 @@ export const phoneSchema = z
   .refine((v) => /^(0\d{9}|\+233\d{9}|233\d{9})$/.test(v), "Enter a valid Ghana phone number.")
   .transform((v) => (v.startsWith("0") ? v : "0" + v.replace(/^\+?233/, "")));
 
+// Standard applied everywhere a password is set (registration, password
+// reset): at least 8 characters, mixing letters, numbers, AND a symbol —
+// surfaced to the user as visible helper text on those forms (not just a
+// rejection after the fact), in src/app/(auth)/register/page.tsx and
+// src/app/(auth)/reset/page.tsx.
 export const passwordSchema = z
   .string()
   .min(8, "Use at least 8 characters.")
   .max(200)
-  .refine((v) => /[a-z]/.test(v) && /[A-Z0-9]/.test(v), "Include a mix of letters and numbers.");
+  .refine((v) => /[a-zA-Z]/.test(v), "Include at least one letter.")
+  .refine((v) => /[0-9]/.test(v), "Include at least one number.")
+  .refine((v) => /[^a-zA-Z0-9]/.test(v), "Include at least one symbol (e.g. ! @ # $ %).");
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
